@@ -11,8 +11,10 @@ import (
 	"strings"
 	"time"
 
+	"codecompass/internal/config"
 	"codecompass/internal/coverage"
 	"codecompass/internal/git"
+	"codecompass/internal/spellcheck"
 	"codecompass/internal/types"
 
 	"github.com/fatih/color"
@@ -711,6 +713,175 @@ func GenerateCodeCoverageLeaderboard(trackedFiles map[string]bool, coverageFile 
 			color.BlueString("📊"),
 			color.New(color.Bold).Sprintf("%.1f%%", overallCoverage),
 			coveredLines, totalLines)
+	}
+}
+
+func GenerateSpellCheckLeaderboard(trackedFiles map[string]bool, cfg *config.Config, topN int) error {
+	fmt.Printf("\n📝 %s\n", color.New(color.Bold).Sprint("Spell Check Leaderboard - Files with Most Spelling Errors:"))
+
+	entries, authorStats, err := spellcheck.AnalyzeSpelling(trackedFiles, cfg)
+	if err != nil {
+		fmt.Printf("  %s Failed to analyze spelling: %v\n", color.RedString("❌"), err)
+		return err
+	}
+
+	if len(entries) == 0 {
+		fmt.Printf("  %s No spelling issues found or no text files to analyze\n", color.GreenString("🎉"))
+		return nil
+	}
+
+	// Show file leaderboard
+	generateSpellCheckFileLeaderboard(entries, topN)
+
+	// Show author leaderboard
+	generateSpellCheckAuthorLeaderboard(authorStats, topN)
+
+	return nil
+}
+
+func generateSpellCheckFileLeaderboard(entries []types.SpellCheckEntry, topN int) {
+	fmt.Printf("\n  %s\n", color.New(color.Bold).Sprint("📁 Files with Most Spelling Errors:"))
+
+	maxEntries := topN
+	if len(entries) < maxEntries {
+		maxEntries = len(entries)
+	}
+
+	for i := 0; i < maxEntries; i++ {
+		entry := entries[i]
+		rank := fmt.Sprintf("%2d", i+1)
+		path := color.CyanString(entry.Path)
+
+		var errorColor *color.Color
+		if entry.ErrorRate > 10 {
+			errorColor = color.New(color.FgRed)
+		} else if entry.ErrorRate > 5 {
+			errorColor = color.New(color.FgYellow)
+		} else {
+			errorColor = color.New(color.FgGreen)
+		}
+
+		// Show top misspellings
+		var topMisspellings []string
+		type wordCount struct {
+			word  string
+			count int
+		}
+		var wordCounts []wordCount
+		for word, count := range entry.TopMisspellings {
+			wordCounts = append(wordCounts, wordCount{word, count})
+		}
+		sort.Slice(wordCounts, func(i, j int) bool {
+			return wordCounts[i].count > wordCounts[j].count
+		})
+
+		for i, wc := range wordCounts {
+			if i >= 3 { // Show top 3 misspellings
+				break
+			}
+			topMisspellings = append(topMisspellings, fmt.Sprintf("%s(%d)", wc.word, wc.count))
+		}
+
+		misspellingsStr := ""
+		if len(topMisspellings) > 0 {
+			misspellingsStr = fmt.Sprintf(" [%s]", strings.Join(topMisspellings, ", "))
+		}
+
+		fmt.Printf("    %s. %s – %s error rate (%d/%d words)%s\n",
+			rank, path,
+			errorColor.Sprintf("%.1f%%", entry.ErrorRate),
+			entry.MisspelledWords, entry.TotalWords,
+			color.New(color.FgHiBlack).Sprint(misspellingsStr))
+	}
+
+	// Show example issues with authors
+	if len(entries) > 0 && len(entries[0].Issues) > 0 {
+		fmt.Printf("\n  %s Examples from %s:\n",
+			color.YellowString("🔍"),
+			color.CyanString(entries[0].Path))
+
+		maxExamples := 5
+		for i, issue := range entries[0].Issues {
+			if i >= maxExamples {
+				break
+			}
+
+			suggestionStr := ""
+			if len(issue.Suggestions) > 0 {
+				suggestionStr = fmt.Sprintf(" → %s", strings.Join(issue.Suggestions, ", "))
+			}
+
+			authorStr := ""
+			if issue.Author != "unknown" {
+				authorStr = fmt.Sprintf(" (by %s)", color.BlueString(issue.Author))
+			}
+
+			fmt.Printf("    Line %d: '%s' in %s%s%s\n",
+				issue.Line,
+				color.RedString(issue.Word),
+				issue.Type,
+				authorStr,
+				color.GreenString(suggestionStr))
+		}
+	}
+}
+
+func generateSpellCheckAuthorLeaderboard(authorStats map[string]*types.SpellCheckAuthorStats, topN int) {
+	fmt.Printf("\n  %s\n", color.New(color.Bold).Sprint("👤 Authors with Most Spelling Errors:"))
+
+	type authorEntry struct {
+		Name            string
+		Email           string
+		TotalErrors     int
+		Files           int
+		TopMistake      string
+		TopMistakeCount int
+	}
+
+	var entries []authorEntry
+	for _, stats := range authorStats {
+		var topMistake string
+		var topCount int
+		for mistake, count := range stats.CommonMistakes {
+			if count > topCount {
+				topMistake = mistake
+				topCount = count
+			}
+		}
+
+		entries = append(entries, authorEntry{
+			Name:            stats.Name,
+			Email:           stats.Email,
+			TotalErrors:     stats.TotalErrors,
+			Files:           len(stats.Files),
+			TopMistake:      topMistake,
+			TopMistakeCount: topCount,
+		})
+	}
+
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].TotalErrors > entries[j].TotalErrors
+	})
+
+	maxEntries := topN
+	if len(entries) < maxEntries {
+		maxEntries = len(entries)
+	}
+
+	for i := 0; i < maxEntries; i++ {
+		entry := entries[i]
+		rank := fmt.Sprintf("%2d", i+1)
+		name := color.RedString(entry.Name)
+		email := color.New(color.FgHiBlack).Sprintf("(%s)", entry.Email)
+
+		topMistakeStr := ""
+		if entry.TopMistake != "" {
+			topMistakeStr = fmt.Sprintf(", top mistake: %s(%d)",
+				color.YellowString(entry.TopMistake), entry.TopMistakeCount)
+		}
+
+		fmt.Printf("    %s. %s %s – %d errors in %d files%s\n",
+			rank, name, email, entry.TotalErrors, entry.Files, topMistakeStr)
 	}
 }
 

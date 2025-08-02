@@ -4,6 +4,7 @@ go 1.22.0
 
 require (
 	github.com/fatih/color v1.18.0
+	github.com/sajari/fuzzy v1.0.0
 	github.com/schollz/progressbar/v3 v3.18.0
 )
 

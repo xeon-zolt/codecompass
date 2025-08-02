@@ -60,6 +60,7 @@ func main() {
 		showDebt       = flag.Bool("debt", false, "Show technical debt leaderboard")
 		showComplexity = flag.Bool("complexity", false, "Show code complexity leaderboard")
 		showSummary    = flag.Bool("summary", true, "Show repository summary")
+		showSpellCheck = flag.Bool("spellcheck", false, "Show spell check leaderboard")
 
 		// Configuration flags
 		topN             = flag.Int("top", 15, "Number of entries to show in leaderboards")
@@ -350,6 +351,13 @@ func main() {
 	if *verbose {
 		fmt.Printf("\n%s %s\n", MINI_COMPASS, color.GreenString("Navigation completed successfully!"))
 	}
+
+	if *showSpellCheck {
+		fmt.Printf("\n🧭 %s", color.New(color.FgHiCyan).Sprint("ENE: "))
+		if err := leaderboard.GenerateSpellCheckLeaderboard(filteredFiles, cfg, *topN); err != nil {
+			fmt.Printf("❌ Failed to generate spell check leaderboard: %v\n", err)
+		}
+	}
 }
 
 func showCompassArt() {
@@ -406,6 +414,7 @@ func showUsage() {
 	fmt.Printf("  🧭 SSE      --bugs                 Bug density leaderboard\n")
 	fmt.Printf("  🧭 SSW      --debt                 Technical debt leaderboard\n")
 	fmt.Printf("  🧭 NNE      --complexity           Code complexity leaderboard\n")
+	fmt.Printf("  🧭 ENE      --spellcheck           Spell check leaderboard\n")
 	fmt.Printf("  🧭 Center   --summary              Repository summary\n\n")
 
 	fmt.Printf("%s\n", color.BlueString("CONFIGURATION OPTIONS:"))

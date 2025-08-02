@@ -143,3 +143,34 @@ type FileCoverage struct {
 	BranchesCovered  int
 	BranchesTotal    int
 }
+
+// Spell check types
+type SpellCheckAuthorStats struct {
+	Name           string
+	Email          string
+	TotalErrors    int
+	Files          map[string]int // filename -> error count
+	CommonMistakes map[string]int // word -> count
+}
+
+type SpellIssue struct {
+	Word        string
+	Line        int
+	Column      int
+	Context     string
+	Type        string // "comment", "string", "identifier"
+	Suggestions []string
+	Author      string
+	AuthorEmail string
+}
+
+// Update existing SpellCheckEntry if needed
+type SpellCheckEntry struct {
+	Rank            int
+	Path            string
+	MisspelledWords int
+	TotalWords      int
+	ErrorRate       float64
+	TopMisspellings map[string]int
+	Issues          []SpellIssue
+}

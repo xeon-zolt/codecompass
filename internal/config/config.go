@@ -10,30 +10,38 @@ import (
 )
 
 type Config struct {
-	IgnoredFiles         []string
-	IgnoredAuthors       []string
-	IgnoredRules         []string
-	IgnoredPaths         []string
-	MaxFileSize          int
-	MinCoverageThreshold float64
-	MaxConcurrentBlame   int
-	CacheResults         bool
-	EnableGitHooks       bool
-	CustomSettings       map[string]string
+	IgnoredFiles          []string
+	IgnoredAuthors        []string
+	IgnoredRules          []string
+	IgnoredPaths          []string
+	MaxFileSize           int
+	MinCoverageThreshold  float64
+	MaxConcurrentBlame    int
+	CacheResults          bool
+	EnableGitHooks        bool
+	CustomSettings        map[string]string
+	CustomWords           []string
+	SpellCheckEnabled     bool
+	SpellCheckExtensions  []string
+	SpellCheckIgnorePaths []string
 }
 
 func NewConfig() *Config {
 	return &Config{
-		IgnoredFiles:         []string{},
-		IgnoredAuthors:       []string{},
-		IgnoredRules:         []string{},
-		IgnoredPaths:         []string{},
-		MaxFileSize:          5000,
-		MinCoverageThreshold: 80.0,
-		MaxConcurrentBlame:   4,
-		CacheResults:         true,
-		EnableGitHooks:       false,
-		CustomSettings:       make(map[string]string),
+		IgnoredFiles:          []string{},
+		IgnoredAuthors:        []string{},
+		IgnoredRules:          []string{},
+		IgnoredPaths:          []string{},
+		MaxFileSize:           5000,
+		MinCoverageThreshold:  80.0,
+		MaxConcurrentBlame:    4,
+		CacheResults:          true,
+		EnableGitHooks:        false,
+		CustomSettings:        make(map[string]string),
+		CustomWords:           []string{},
+		SpellCheckEnabled:     true,
+		SpellCheckExtensions:  []string{".js", ".ts", ".jsx", ".tsx", ".md", ".txt"},
+		SpellCheckIgnorePaths: []string{"node_modules", "dist", "build"},
 	}
 }
 
@@ -143,6 +151,14 @@ func (c *Config) parseKeyValue(key, value string) error {
 		c.CacheResults = strings.ToLower(value) == "true"
 	case "enable-git-hooks":
 		c.EnableGitHooks = strings.ToLower(value) == "true"
+	case "custom-words":
+		c.CustomWords = append(c.CustomWords, parseList(value)...)
+	case "spellcheck-enabled":
+		c.SpellCheckEnabled = strings.ToLower(value) == "true"
+	case "spellcheck-extensions":
+		c.SpellCheckExtensions = parseList(value)
+	case "spellcheck-ignore-paths":
+		c.SpellCheckIgnorePaths = parseList(value)
 	default:
 		c.CustomSettings[key] = value
 	}
@@ -274,6 +290,13 @@ team-name = "Development Team"
 # CodeCompass specific settings
 show-compass-art = true
 default-direction = "all"
+
+# Spell check configuration
+spellcheck-enabled = true
+custom-words = "api,url,auth,oauth,async,await,json,xml,css,html,dom,ui,ux"
+spellcheck-extensions = ".js,.ts,.jsx,.tsx,.md,.txt,.py,.java"
+spellcheck-ignore-paths = "node_modules,dist,build,coverage"
+
 `
 
 	return os.WriteFile(filename, []byte(content), 0644)
