@@ -1,0 +1,41 @@
+name: Release
+
+on: 
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Build
+        run: go build -o codecompass -ldflags "-s -w"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: codecompass
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate Homebrew tap
+        run: |
+          TAG=${{ github.ref_name }}
+          SHA256=$(sha256sum codecompass | awk '{print $1}')
+          sed -i "s|url \"https://github.com/xeoncross/codecompass/archive/refs/tags/v0.0.1.tar.gz\"|url \"https://github.com/xeoncross/codecompass/archive/refs/tags/${TAG}.tar.gz\"|" Formula/codecompass.rb
+          sed -i "s|sha256 \"0000000000000000000000000000000000000000000000000000000000000000\"|sha256 \"${SHA256}\"|" Formula/codecompass.rb
+          git config user.name github-actions[bot]
+          git config user.email github-actions[bot]@users.noreply.github.com
+          git add Formula/codecompass.rb
+          git commit -m "Update codecompass.rb for ${TAG}"
+          git push
