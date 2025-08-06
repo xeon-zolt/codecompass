@@ -1,161 +1,154 @@
-# ESLint Blame Tool 🔍
+# CodeCompass 🧭
 
-A comprehensive code quality analysis tool that combines ESLint results with git blame information to provide detailed insights into your JavaScript/TypeScript codebase. Track who introduced lint issues, analyze code metrics, and identify areas for improvement.
+A comprehensive code quality navigation tool that helps you understand and improve your codebase. CodeCompass combines insights from various sources, including linting results and Git history, to provide detailed leaderboards and metrics.
 
 ## 🌟 Features
 
-### 📊 Multiple Leaderboards
-- **Author Leaderboard** - Who introduced the most lint issues
-- **File Leaderboard** - Files with the most problems
-- **Rule Leaderboard** - Most violated ESLint rules
-- **Lines of Code** - Largest files in your codebase
-- **Commit Activity** - Most active contributors
-- **Recent Contributors** - Recent activity analysis
-- **Code Coverage** - Coverage statistics by file
-- **Code Churn** - Files with most frequent changes
-- **Bug Density** - Files with highest bug-fix ratio
-- **Technical Debt** - TODO/FIXME/HACK comments analysis
+### 📊 Multiple Leaderboards (Compass Directions)
+CodeCompass provides a multi-dimensional view of your codebase, represented by compass directions:
+
+-   **🧭 North: Author Leaderboard** - Identifies authors who introduced the most lint issues.
+-   **🧭 South: File Leaderboard** - Highlights files with the highest number of linting problems.
+-   **🧭 East: Rule Leaderboard** - Shows the most frequently violated ESLint rules.
+-   **🧭 West: Lines of Code (LOC) Leaderboard** - Ranks files by their lines of code.
+-   **🧭 NE: Commit Activity Leaderboard** - Displays contributors with the most regular (non-merge) commits.
+-   **🧭 NNE: Merge Commit Leaderboard** - Shows contributors with the most merge commits.
+-   **🧭 NW: Recent Contributors Leaderboard** - Analyzes recent activity to identify active contributors.
+-   **🧭 SE: Code Coverage Leaderboard** - Provides insights into code coverage statistics by file.
+-   **🧭 SW: Code Churn Leaderboard** - Pinpoints files with the most frequent changes.
+-   **🧭 SSE: Bug Density Leaderboard** - Identifies files with a high bug-fix ratio.
+-   **🧭 SSW: Technical Debt Leaderboard** - Analyzes TODO/FIXME/HACK comments to quantify technical debt.
+-   **🧭 NNW: Code Complexity Leaderboard** - (Coming Soon) Measures the complexity of your code.
+-   **🧭 ENE: Spell Check Leaderboard** - Identifies files with spelling errors.
+-   **🧭 Center: Repository Summary** - Provides an overall summary of your repository's health.
 
 ### ⚙️ Advanced Configuration
-- **Flexible Ignore Patterns** - Ignore files, authors, rules, and paths
-- **Performance Tuning** - Configurable concurrency and caching
-- **Multiple Config Formats** - Support for various configuration files
-- **Auto-detection** - Smart detection of coverage files and git repositories
+-   **Flexible Ignore Patterns** - Ignore files, authors, rules, and paths.
+-   **Performance Tuning** - Configurable concurrency and caching.
+-   **Multiple Config Formats** - Supports `.codecompass.rc`, `.codecompass.config`, and `codecompass.config`.
+-   **Auto-detection** - Smart detection of coverage files and Git repositories.
 
 ### 🚀 Performance Optimized
-- **Conditional Execution** - Only runs ESLint when needed
-- **Concurrent Processing** - Multi-threaded git blame operations
-- **Smart Caching** - Caches git blame results for better performance
-- **Memory Efficient** - Handles large repositories efficiently
+-   **Conditional Execution** - Only runs ESLint when needed.
+-   **Concurrent Processing** - Multi-threaded Git blame operations.
+-   **Smart Caching** - Caches Git blame results for better performance.
+-   **Memory Efficient** - Handles large repositories efficiently.
 
 ## 📦 Installation
 
 ### From Source
-```
-git clone https://github.com/your-org/eslint-blame
-cd eslint-blame
+```bash
+git clone https://github.com/xeoncross/codecompass
+cd codecompass
 go mod tidy
-CGO_ENABLED=0 go build -o eslint-blame main.go
-chmod +x eslint-blame
+CGO_ENABLED=0 go build -o codecompass main.go
+chmod +x codecompass
 ```
+
+### Homebrew (Coming Soon)
+```bash
+brew tap xeoncross/tap
+brew install codecompass
+```
+
+## 🚀 Usage
 
 ### Basic Usage
 
-Analyze current directory
+Analyze current directory:
+```bash
+./codecompass
+```
 
-./eslint-blame
-Analyze specific repository
+Analyze specific repository:
+```bash
+./codecompass /path/to/your/project
+```
 
-./eslint-blame /path/to/your/project
-Show only specific leaderboards
+Show only specific leaderboards:
+```bash
+./codecompass --authors --files --coverage
+```
 
-./eslint-blame --authors --files --coverage
-
+Show all leaderboards:
+```bash
+./codecompass --all
+```
 
 ### Generate Configuration File
 
-This creates a `.eslint-blamerc` file with all available options:
-
-
-ESLint Blame Configuration File
-Lines starting with # are comments
-Ignore specific files (supports wildcards and globs)
-
-ignore-files = ".test.js,.spec.js,.d.ts,dist/,build/,node_modules/"
-Ignore specific file paths
-
-ignore-paths = "node_modules,coverage,.git,vendor,tmp,.next,out"
-Ignore specific authors (email or name patterns)
-
-ignore-authors = "bot@company.com,dependabot,renovate,github-actions"
-Additional ESLint rules to ignore beyond command line
-
-ignore-rules = "prefer-const,no-console"
-Maximum file size to analyze (in KB, 0 = no limit)
-
-max-file-size = 5000
-Minimum coverage threshold for warnings (percentage)
-
-min-coverage-threshold = 80
-Maximum concurrent git blame operations
-
-max-concurrent-blame = 4
-Cache git blame results for better performance
-
-cache-results = true
-Enable git hooks integration (experimental)
-
-enable-git-hooks = false
+This creates a `.codecompass.rc` file with all available options:
+```bash
+./codecompass --generate-config
+```
 
 ## 📋 Command Line Options
 
 ### Leaderboard Options
 
---authors Show author leaderboard (default: true)
---files Show file leaderboard (default: true)
---rules Show rule leaderboard (default: true)
---loc Show lines of code leaderboard (default: true)
---commits Show commit count leaderboard (default: true)
---recent Show recent contributors leaderboard (default: true)
---coverage Show code coverage leaderboard (default: true)
---churn Show code churn leaderboard (default: false)
---bugs Show bug density leaderboard (default: false)
---debt Show technical debt leaderboard (default: false)
---summary Show repository summary (default: true)
+-   `--authors`: Show author leaderboard (lint issue contributors)
+-   `--files`: Show file leaderboard (most problematic files)
+-   `--rules`: Show rule leaderboard (most violated rules)
+-   `--loc`: Show lines of code leaderboard
+-   `--commits`: Show regular commit count leaderboard (non-merges)
+-   `--merges`: Show merge commit count leaderboard
+-   `--recent`: Show recent contributors leaderboard
+-   `--coverage`: Show code coverage leaderboard
+-   `--churn`: Show code churn leaderboard
+-   `--bugs`: Show bug density leaderboard
+-   `--debt`: Show technical debt leaderboard
+-   `--complexity`: Show code complexity leaderboard (coming soon)
+-   `--spellcheck`: Show spell check leaderboard
+-   `--summary`: Show repository summary
+-   `--all`: Show all leaderboards
 
 ### Configuration Options
 
---config FILE Path to configuration file
---generate-config Generate a sample configuration file
---show-config Show current configuration and exit
---top N Number of entries to show (default: 15)
---ignore RULES Comma-separated ESLint rules to ignore
---coverage-file FILE Path to coverage file (auto-detected)
+-   `--config FILE`: Path to configuration file
+-   `--generate-config`: Generate a sample configuration file
+-   `--show-config`: Show current configuration and exit
+-   `--top N`: Number of entries to show in leaderboards (default: 15)
+-   `--ignore RULES`: Comma-separated ESLint rules to ignore
+-   `--coverage-file FILE`: Path to coverage file (auto-detected)
 
+### Display Options
 
-### Output Options
+-   `--logo`: Show CodeCompass ASCII art
+-   `--cache`: Enable caching for better performance (default: true)
+-   `--verbose`: Enable verbose output
+-   `--quiet`: Suppress non-essential output
 
---format FORMAT Output format: console, json, csv (default: console)
---output FILE Output file (default: stdout)
---verbose Enable verbose output
---quiet Suppress non-essential output
+### Other Options
 
-
-### Performance Options
-
---cache Enable result caching (default: true)
-
+-   `-h, --help`: Show this help message
+-   `-v, --version`: Show version information
 
 ## 📊 Example Output
 
 ### Author Leaderboard
 
-🏆 Author Leaderboard - Most ESLint Issues:
-
+```
+🧭 North: Author Leaderboard - Most ESLint Issues:
     John Doe (john@company.com) – 45 issues (12 errors, 33 warnings), 8 files, top rule: no-unused-vars (15)
-
     Jane Smith (jane@company.com) – 32 issues (8 errors, 24 warnings), 12 files, top rule: prefer-const (12)
-
     Bob Wilson (bob@company.com) – 18 issues (3 errors, 15 warnings), 6 files, top rule: no-console (8)
+```
 
-File Leaderboard
+### File Leaderboard
 
-📁 File Leaderboard - Most Problematic Files:
-
+```
+🧭 South: File Leaderboard - Most Problematic Files:
     src/utils/helper.js – 23 issues, 3 authors, top rule: complexity (8)
-
     src/components/Dashboard.tsx – 19 issues, 2 authors, top rule: react-hooks/exhaustive-deps (7)
-
     src/api/client.js – 15 issues, 4 authors, top rule: no-unused-vars (6)
+```
 
 ### Code Coverage Leaderboard
 
-📈 Code Coverage Leaderboard - Coverage by File:
-
+```
+🧭 SE: Code Coverage Leaderboard - Coverage by File:
     src/utils/validation.js – 45.2% (128/283 lines, 67% functions)
-
     src/components/Modal.tsx – 52.8% (95/180 lines, 71% functions)
-
     src/api/auth.js – 61.3% (76/124 lines, 80% functions)
 
 🏆 Files with highest coverage:
@@ -164,80 +157,88 @@ src/types/index.ts – 95.2%
 src/config/app.js – 92.1%
 
 📊 Overall Coverage: 73.4% (2,847/3,879 lines covered)
+```
 
 ## 🎯 Use Cases
 
 ### For Development Teams
-- **Code Review Focus** - Identify files and authors that need attention
-- **Quality Metrics** - Track code quality trends over time
-- **Onboarding** - Help new team members understand codebase patterns
+-   **Code Review Focus** - Identify files and authors that need attention.
+-   **Quality Metrics** - Track code quality trends over time.
+-   **Onboarding** - Help new team members understand codebase patterns.
 
 ### For Project Managers
-- **Technical Debt** - Quantify and prioritize technical debt
-- **Resource Allocation** - Identify areas that need more development time
-- **Quality Trends** - Monitor code quality improvements over time
+-   **Technical Debt** - Quantify and prioritize technical debt.
+-   **Resource Allocation** - Identify areas that need more development time.
+-   **Quality Trends** - Monitor code quality improvements over time.
 
 ### For Individual Developers
-- **Personal Metrics** - Track your own code quality contributions
-- **Learning** - Identify which rules you violate most often
-- **Improvement** - Focus on specific areas for skill development
+-   **Personal Metrics** - Track your own code quality contributions.
+-   **Learning** - Identify which rules you violate most often.
+-   **Improvement** - Focus on specific areas for skill development.
 
 ## 🔧 Advanced Usage
 
 ### Running Only Non-ESLint Leaderboards
 
-Much faster - skips ESLint execution entirely
+Much faster - skips ESLint execution entirely:
+```bash
+./codecompass --no-authors --no-files --no-rules --loc --coverage --commits
+```
 
-./eslint-blame --no-authors --no-files --no-rules --loc --coverage --commits
+### Custom Configuration
 
-## Custom Configuration
+Use specific config file:
+```bash
+./codecompass --config ./my-project.config
+```
 
-Use specific config file
+Show top 25 entries:
+```bash
+./codecompass --top 25
+```
 
-./eslint-blame --config ./my-project.config
-Show top 25 entries
-
-./eslint-blame --top 25
-Focus on specific metrics
-
-./eslint-blame --churn --bugs --debt --no-summary
-
+Focus on specific metrics:
+```bash
+./codecompass --churn --bugs --debt --no-summary
+```
 
 ### Integration with CI/CD
 
-Generate report for CI
+Generate report for CI:
+```bash
+./codecompass --quiet --output ./reports/quality-report.txt
+```
 
-./eslint-blame --quiet --output ./reports/quality-report.txt
-Check if quality threshold is met
-
-./eslint-blame --format json --output quality.json
-
+Check if quality threshold is met:
+```bash
+./codecompass --format json --output quality.json
+```
 
 ### Coverage Integration
 The tool automatically detects coverage files in these locations:
-- `coverage/lcov.info`
-- `coverage/coverage.info`
-- `lcov.info`
-- `coverage-final.json`
-- `.nyc_output/coverage-final.json`
+-   `coverage/lcov.info`
+-   `coverage/coverage.info`
+-   `lcov.info`
+-   `coverage-final.json`
+-   `.nyc_output/coverage-final.json`
 
 Or specify manually:
-
-./eslint-blame --coverage-file ./custom/coverage.info
+```bash
+./codecompass --coverage-file ./custom/coverage.info
+```
 
 ## 🛠️ Requirements
 
-- **Git** - Must be run within a git repository
-- **Node.js & npm/yarn** - For ESLint execution (if using ESLint leaderboards)
-- **ESLint** - Configured in your project (if using ESLint leaderboards)
+-   **Git** - Must be run within a Git repository.
+-   **Node.js & npm/yarn** - Required for ESLint execution (if using ESLint-based leaderboards like Authors, Files, Rules).
+-   **ESLint** - Must be configured in your project (if using ESLint-based leaderboards).
 
 ## 📝 Configuration File Reference
 
 ### File Locations (in order of precedence)
-1. `.eslint-blamerc`
-2. `.eslintblamerc`
-3. `eslint-blame.config`
-4. `.eslint-blame.config`
+1.  `.codecompass.rc`
+2.  `.codecompass.config`
+3.  `codecompass.config`
 
 ### Configuration Options
 
@@ -249,22 +250,21 @@ Or specify manually:
 | `ignore-paths` | string[] | `[]` | Path patterns to ignore |
 | `max-file-size` | int | `5000` | Max file size in KB (0 = no limit) |
 | `min-coverage-threshold` | float | `80.0` | Coverage threshold for warnings |
-| `max-concurrent-blame` | int | `4` | Max concurrent git operations |
+| `max-concurrent-blame` | int | `4` | Max concurrent Git operations |
 | `cache-results` | bool | `true` | Enable result caching |
-| `enable-git-hooks` | bool | `false` | Enable git hooks integration |
 
 ### Pattern Matching
-- **File patterns**: Support wildcards (`*.js`) and globs (`src/**/*.test.js`)
-- **Author patterns**: Match against name or email (case-insensitive)
-- **Path patterns**: Simple substring matching
+-   **File patterns**: Support wildcards (`*.js`) and globs (`src/**/*.test.js`).
+-   **Author patterns**: Match against name or email (case-insensitive).
+-   **Path patterns**: Simple substring matching.
 
 ## 🤝 Contributing
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+1.  Fork the repository.
+2.  Create your feature branch (`git checkout -b feature/amazing-feature`).
+3.  Commit your changes (`git commit -m 'Add some amazing feature'`).
+4.  Push to the branch (`git push origin feature/amazing-feature`).
+5.  Open a Pull Request.
 
 ## 📄 License
 
@@ -272,9 +272,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🙏 Acknowledgments
 
-- ESLint team for the excellent linting tool
-- Git team for the powerful version control system
-- Go community for the fantastic tooling ecosystem
+-   ESLint team for the excellent linting tool.
+-   Git team for the powerful version control system.
+-   Go community for the fantastic tooling ecosystem.
 
 
 **Made with ❤️ for developers who care about code quality**
