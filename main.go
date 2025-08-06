@@ -47,20 +47,23 @@ func main() {
 		v        = flag.Bool("v", false, "Show version information (short)")
 		showLogo = flag.Bool("logo", false, "Show CodeCompass ASCII art")
 
-		// Leaderboard flags
-		showAuthors    = flag.Bool("authors", true, "Show author leaderboard")
-		showFiles      = flag.Bool("files", true, "Show file leaderboard")
-		showRules      = flag.Bool("rules", true, "Show rule leaderboard")
-		showLoc        = flag.Bool("loc", true, "Show lines of code leaderboard")
-		showCommits    = flag.Bool("commits", true, "Show commit count leaderboard")
-		showRecent     = flag.Bool("recent", true, "Show recent contributors leaderboard")
-		showCoverage   = flag.Bool("coverage", true, "Show code coverage leaderboard")
+		// Leaderboard flags (default to false to be opt-in)
+		showAuthors    = flag.Bool("authors", false, "Show author leaderboard (lint issue contributors)")
+		showFiles      = flag.Bool("files", false, "Show file leaderboard (most problematic files)")
+		showRules      = flag.Bool("rules", false, "Show rule leaderboard (most violated rules)")
+		showLoc        = flag.Bool("loc", false, "Show lines of code leaderboard")
+		showCommits    = flag.Bool("commits", false, "Show regular commit count leaderboard (non-merges)")
+		showMerges     = flag.Bool("merges", false, "Show merge commit count leaderboard")
+		showRecent     = flag.Bool("recent", false, "Show recent contributors leaderboard")
+		showCoverage   = flag.Bool("coverage", false, "Show code coverage leaderboard")
 		showChurn      = flag.Bool("churn", false, "Show code churn leaderboard")
 		showBugs       = flag.Bool("bugs", false, "Show bug density leaderboard")
 		showDebt       = flag.Bool("debt", false, "Show technical debt leaderboard")
 		showComplexity = flag.Bool("complexity", false, "Show code complexity leaderboard")
-		showSummary    = flag.Bool("summary", true, "Show repository summary")
+		showSummary    = flag.Bool("summary", false, "Show repository summary")
 		showSpellCheck = flag.Bool("spellcheck", false, "Show spell check leaderboard")
+
+		showAll = flag.Bool("all", false, "Show all leaderboards")
 
 		// Configuration flags
 		topN             = flag.Int("top", 15, "Number of entries to show in leaderboards")
@@ -94,11 +97,6 @@ func main() {
 		return
 	}
 
-	// Show mini compass at start unless quiet
-	if !*quiet {
-		fmt.Print(color.CyanString(COMPASS_ART))
-	}
-
 	if *generateConfig {
 		filename := ".codecompass.rc"
 		if err := config.GenerateConfigFile(filename); err != nil {
@@ -106,6 +104,39 @@ func main() {
 		}
 		fmt.Printf("✅ Generated configuration file: %s\n", filename)
 		return
+	}
+
+	if *showAll {
+		*showAuthors = true
+		*showFiles = true
+		*showRules = true
+		*showLoc = true
+		*showCommits = true
+		*showMerges = true
+		*showRecent = true
+		*showCoverage = true
+		*showChurn = true
+		*showBugs = true
+		*showDebt = true
+		*showComplexity = true
+		*showSummary = true
+		*showSpellCheck = true
+	}
+
+	// Check if any action was requested by the user.
+	actionRequested := *showAuthors || *showFiles || *showRules || *showLoc ||
+		*showCommits || *showMerges || *showRecent || *showCoverage || *showChurn ||
+		*showBugs || *showDebt || *showComplexity || *showSummary || *showSpellCheck ||
+		*showConfig
+
+	// If no action is specified, show usage information and exit.
+	if !actionRequested && len(flag.Args()) == 0 {
+		showUsage()
+		return
+	}
+
+	if !*quiet {
+		fmt.Print(color.CyanString(COMPASS_ART))
 	}
 
 	// Load configuration
@@ -252,7 +283,6 @@ func main() {
 					}
 					continue
 				}
-
 				if bar != nil {
 					bar.Add(1)
 				}
@@ -267,7 +297,6 @@ func main() {
 		}
 	}
 
-	// Navigation header for leaderboards
 	if !*quiet {
 		fmt.Printf("\n%s %s\n", MINI_COMPASS, color.New(color.Bold).Sprint("Code Quality Navigation"))
 		fmt.Printf("%s\n", strings.Repeat("─", 50))
@@ -276,17 +305,29 @@ func main() {
 	// Generate leaderboards with compass directions
 	if *showAuthors && len(issues) > 0 {
 		fmt.Printf("\n🧭 %s", color.New(color.FgYellow).Sprint("North: "))
-		leaderboard.GenerateAuthorLeaderboard(authorStats, *topN)
+		if needsESLint {
+			leaderboard.GenerateAuthorLeaderboard(authorStats, *topN)
+		} else {
+			fmt.Println("Author leaderboard requires ESLint analysis. Run with --authors flag.")
+		}
 	}
 
-	if *showFiles && len(issues) > 0 {
+	if *showFiles {
 		fmt.Printf("\n🧭 %s", color.New(color.FgRed).Sprint("South: "))
-		leaderboard.GenerateFileLeaderboard(fileStats, *topN)
+		if needsESLint {
+			leaderboard.GenerateFileLeaderboard(fileStats, *topN)
+		} else {
+			fmt.Println("File leaderboard requires ESLint analysis. Run with --files flag.")
+		}
 	}
 
-	if *showRules && len(issues) > 0 {
+	if *showRules {
 		fmt.Printf("\n🧭 %s", color.New(color.FgBlue).Sprint("East: "))
-		leaderboard.GenerateRuleLeaderboard(ruleStats, *topN)
+		if needsESLint {
+			leaderboard.GenerateRuleLeaderboard(ruleStats, *topN)
+		} else {
+			fmt.Println("Rule leaderboard requires ESLint analysis. Run with --rules flag.")
+		}
 	}
 
 	if *showLoc {
@@ -335,12 +376,18 @@ func main() {
 		fmt.Printf("Code complexity leaderboard coming soon!\n")
 	}
 
+	if *showSpellCheck {
+		fmt.Printf("\n🧭 %s", color.New(color.FgHiCyan).Sprint("ENE: "))
+		if err := leaderboard.GenerateSpellCheckLeaderboard(filteredFiles, cfg, *topN); err != nil {
+			fmt.Printf("❌ Failed to generate spell check leaderboard: %v\n", err)
+		}
+	}
+
 	if *showSummary {
 		fmt.Printf("\n%s %s", MINI_COMPASS, color.New(color.Bold).Sprint("Center: "))
 		leaderboard.GenerateSummaryStats(authorStats, fileStats, ruleStats)
 	}
 
-	// Print warnings
 	if len(warningLogs) > 0 && !*quiet {
 		fmt.Printf("\n%s %s\n", MINI_COMPASS, color.YellowString("Navigation Warnings:"))
 		for _, warn := range warningLogs {
@@ -350,13 +397,6 @@ func main() {
 
 	if *verbose {
 		fmt.Printf("\n%s %s\n", MINI_COMPASS, color.GreenString("Navigation completed successfully!"))
-	}
-
-	if *showSpellCheck {
-		fmt.Printf("\n🧭 %s", color.New(color.FgHiCyan).Sprint("ENE: "))
-		if err := leaderboard.GenerateSpellCheckLeaderboard(filteredFiles, cfg, *topN); err != nil {
-			fmt.Printf("❌ Failed to generate spell check leaderboard: %v\n", err)
-		}
 	}
 }
 
@@ -407,13 +447,14 @@ func showUsage() {
 	fmt.Printf("  🧭 South    --files                File leaderboard (most problematic files)\n")
 	fmt.Printf("  🧭 East     --rules                Rule leaderboard (most violated rules)\n")
 	fmt.Printf("  🧭 West     --loc                  Lines of code leaderboard\n")
-	fmt.Printf("  🧭 NE       --commits              Commit count leaderboard\n")
+	fmt.Printf("  🧭 NE       --commits              Regular commit count leaderboard (non-merges)\n")
+	fmt.Printf("  🧭 NNE      --merges               Merge commit count leaderboard\n")
 	fmt.Printf("  🧭 NW       --recent               Recent contributors leaderboard\n")
 	fmt.Printf("  🧭 SE       --coverage             Code coverage leaderboard\n")
 	fmt.Printf("  🧭 SW       --churn                Code churn leaderboard\n")
 	fmt.Printf("  🧭 SSE      --bugs                 Bug density leaderboard\n")
 	fmt.Printf("  🧭 SSW      --debt                 Technical debt leaderboard\n")
-	fmt.Printf("  🧭 NNE      --complexity           Code complexity leaderboard\n")
+	fmt.Printf("  🧭 NNW      --complexity           Code complexity leaderboard (coming soon)\n")
 	fmt.Printf("  🧭 ENE      --spellcheck           Spell check leaderboard\n")
 	fmt.Printf("  🧭 Center   --summary              Repository summary\n\n")
 
@@ -436,20 +477,12 @@ func showUsage() {
 	fmt.Printf("  -v, --version          Show version information\n\n")
 
 	fmt.Printf("%s\n", color.BlueString("NAVIGATION EXAMPLES:"))
-	fmt.Printf("  %s                                    # Full compass navigation\n", os.Args[0])
-	fmt.Printf("  %s /path/to/repo                      # Navigate specific repository\n", os.Args[0])
+	fmt.Printf("  %s --all                              # Full compass navigation (all leaderboards)\n", os.Args[0])
+	fmt.Printf("  %s                                     # Show help message\n", os.Args[0])
+	fmt.Printf("  %s /path/to/repo --commits --merges   # Navigate specific repository and compare commits\n", os.Args[0])
 	fmt.Printf("  %s --authors --files                  # North & South directions only\n", os.Args[0])
 	fmt.Printf("  %s --loc --coverage                   # West & SE directions (no ESLint)\n", os.Args[0])
-	fmt.Printf("  %s --churn --bugs --debt              # SW, SSE, SSW (advanced metrics)\n", os.Args[0])
-	fmt.Printf("  %s --generate-config                  # Create .codecompass.rc file\n", os.Args[0])
-	fmt.Printf("  %s --logo                             # Show compass art\n", os.Args[0])
-	fmt.Printf("  %s --quiet --summary                  # Silent summary only\n\n", os.Args[0])
-
-	fmt.Printf("%s\n", color.BlueString("COMPASS READINGS:"))
-	fmt.Printf("  📊 Quality readings help you navigate code health\n")
-	fmt.Printf("  🎯 Each direction provides different insights\n")
-	fmt.Printf("  🚀 Use multiple directions for comprehensive analysis\n")
-	fmt.Printf("  📈 Track changes over time to monitor progress\n\n")
+	fmt.Printf("  %s --generate-config                  # Create .codecompass.rc file\n\n", os.Args[0])
 
 	fmt.Printf("%s\n", color.BlueString("CONFIGURATION FILE:"))
 	fmt.Printf("  CodeCompass looks for configuration files in this order:\n")

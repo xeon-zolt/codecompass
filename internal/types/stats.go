@@ -3,28 +3,33 @@ package types
 import "time"
 
 type AuthorStats struct {
-	Name      string
-	Count     int
-	Rules     map[string]int
-	Files     map[string]int
-	Errors    int
-	Warnings  int
-	FirstSeen time.Time
-	LastSeen  time.Time
+	Name       string
+	Count      int
+	Rules      map[string]int
+	Files      map[string]int
+	Errors     int
+	Warnings   int
+	FirstSeen  time.Time
+	LastSeen   time.Time
+	IssueCount int
 }
 
 type FileStats struct {
-	Path    string
-	Count   int
-	Rules   map[string]int
-	Authors map[string]int
+	Path       string
+	Count      int
+	Rules      map[string]int
+	Authors    map[string]int
+	IssueCount int
+	Loc        int // Lines of Code
 }
 
 type RuleStats struct {
-	Rule    string
-	Count   int
-	Authors map[string]int
-	Files   map[string]int
+	ID             string
+	ViolationCount int
+	Rule           string
+	Count          int
+	Authors        map[string]int
+	Files          map[string]int
 }
 
 // Existing leaderboard entries
