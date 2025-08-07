@@ -19,7 +19,9 @@ import (
 	"codecompass/internal/types"
 	"codecompass/internal/utils"
 
-	"github.com/fatih/color"
+	"codecompass/internal/ruff"
+
+	"github.com/charmbracelet/lipgloss"
 	"github.com/schollz/progressbar/v3"
 )
 
@@ -38,7 +40,51 @@ const COMPASS_ART = `
    Navigate Your Code Quality
 `
 
-const MINI_COMPASS = `🧭`
+const MINI_COMPASS = "🧭"
+
+var (
+	// Styles for various elements
+	titleStyle = lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("#FAFAFA")).
+		Background(lipgloss.Color("#5d5d5d")).
+		PaddingLeft(1).
+		PaddingRight(1)
+
+	headerStyle = lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("#FAFAFA"))
+
+	infoStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#878787"))
+
+	successStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#00FF00"))
+
+	warningStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#FFFF00"))
+
+	errorStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#FF0000"))
+
+	compassArtStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#00FFFF"))
+
+	logoStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#00FFFF")).
+		Bold(true)
+
+	versionStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#00FFFF")).
+		Bold(true)
+
+	usageHeaderStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#0000FF")).
+		Bold(true)
+
+	leaderboardTitleStyle = lipgloss.NewStyle().
+		Bold(true)
+)
 
 func main() {
 	var (
@@ -63,6 +109,7 @@ func main() {
 		showComplexity = flag.Bool("complexity", false, "Show code complexity leaderboard")
 		showSummary    = flag.Bool("summary", false, "Show repository summary")
 		showSpellCheck = flag.Bool("spellcheck", false, "Show spell check leaderboard")
+		showRuff       = flag.Bool("ruff", false, "Show Ruff (Python) leaderboard")
 
 		showAll = flag.Bool("all", false, "Show all leaderboards")
 
@@ -126,13 +173,17 @@ func main() {
 		*showComplexity = true
 		*showSummary = true
 		*showSpellCheck = true
+		*showRuff = true
 	}
 
 	// Check if any action was requested by the user.
 	actionRequested := *showAuthors || *showFiles || *showRules || *showLoc ||
 		*showCommits || *showMerges || *showRecent || *showCoverage || *showChurn ||
-		*showBugs || *showDebt || *showComplexity || *showSummary || *showSpellCheck ||
+		*showBugs || *showDebt || *showComplexity || *showSummary || *showSpellCheck || *showRuff ||
 		*showConfig
+
+	// Check if Ruff-based leaderboards are needed
+	needsRuff := *showRuff
 
 	// If no action is specified, show usage information and exit.
 	if !actionRequested && len(flag.Args()) == 0 {
@@ -141,7 +192,7 @@ func main() {
 	}
 
 	if !*quiet {
-		fmt.Print(color.CyanString(COMPASS_ART))
+		fmt.Print(compassArtStyle.Render(COMPASS_ART))
 	}
 
 	// Load configuration
@@ -157,7 +208,7 @@ func main() {
 		cfg, err = config.LoadConfig()
 		if err != nil {
 			if !*quiet {
-				fmt.Printf("Warning: Failed to load config: %v\n", err)
+				fmt.Printf("Warning: Failed to load config: %s\n", warningStyle.Render(err.Error()))
 			}
 			cfg = config.NewConfig()
 		}
@@ -238,6 +289,7 @@ func main() {
 	needsESLint := *showAuthors || *showFiles || *showRules
 
 	var issues []types.Issue
+	var ruffIssues []types.Issue
 	var authorStats map[string]*types.AuthorStats
 	var fileStats map[string]*types.FileStats
 	var ruleStats map[string]*types.RuleStats
@@ -245,79 +297,110 @@ func main() {
 
 	if needsESLint {
 		if !*quiet {
-			fmt.Printf("%s %s\n", MINI_COMPASS, color.BlueString("Running ESLint analysis..."))
+			fmt.Printf("%s %s\n", MINI_COMPASS, lipgloss.NewStyle().Foreground(lipgloss.Color("#0000FF")).Render("Running ESLint analysis..."))
 		}
 
 		// Run ESLint
-		issues, err = eslint.RunESLint(filteredFiles, ignoredRules)
+		eslintIssues, err := eslint.RunESLint(filteredFiles, ignoredRules)
 		if err != nil {
 			log.Fatal("Failed to run ESLint:", err)
 		}
+		issues = append(issues, eslintIssues...)
 
 		if !*quiet {
-			fmt.Printf("📊 %d lint issues collected.\n", len(issues))
+			fmt.Printf("📊 %d lint issues collected.\n", len(eslintIssues))
 			if len(ignoredRules) > 0 {
 				fmt.Printf("🚫 Ignored ESLint rules: %s\n", strings.Join(ignoredRules, ", "))
 			}
 		}
+	}
 
-		if len(issues) == 0 {
-			if !*quiet {
-				fmt.Printf("%s %s\n", MINI_COMPASS, color.GreenString("Clean codebase - no issues found!"))
+	if needsRuff {
+		if !*quiet {
+			fmt.Printf("%s %s\n", MINI_COMPASS, lipgloss.NewStyle().Foreground(lipgloss.Color("#0000FF")).Render("Running Ruff analysis..."))
+		}
+
+		pythonFiles := []string{}
+		for file := range filteredFiles {
+			if strings.HasSuffix(file, ".py") {
+				pythonFiles = append(pythonFiles, file)
 			}
-		} else {
-			// Initialize data structures
-			authorStats = make(map[string]*types.AuthorStats)
-			fileStats = make(map[string]*types.FileStats)
-			ruleStats = make(map[string]*types.RuleStats)
-			var mu sync.Mutex
+		}
 
-			// Process issues
-			var bar *progressbar.ProgressBar
-			if !*quiet {
-				bar = progressbar.Default(int64(len(issues)))
+		currentRuffIssues, err := ruff.RunRuff(pythonFiles, cfg.RuffRules, cfg.RuffIgnorePaths)
+		if err != nil {
+			log.Fatal("Failed to run Ruff:", err)
+		}
+		ruffIssues = append(ruffIssues, currentRuffIssues...)
+		issues = append(issues, currentRuffIssues...)
+
+		if !*quiet {
+			fmt.Printf("📊 %d Ruff issues collected.\n", len(currentRuffIssues))
+			if len(cfg.RuffRules) > 0 {
+				fmt.Printf("🚫 Ruff rules: %s\n", strings.Join(cfg.RuffRules, ", "))
 			}
-
-			semaphore := utils.NewSemaphore(cfg.GetConcurrency())
-			analyzer := analyzer.New(semaphore, &mu)
-
-			for _, issue := range issues {
-				if err := analyzer.ProcessIssueWithConfig(issue, cfg, authorStats, fileStats, ruleStats, &warningLogs); err != nil {
-					if *verbose {
-						fmt.Printf("Warning: Failed to process issue in %s:%d: %v\n", issue.FilePath, issue.Line, err)
-					}
-					continue
-				}
-				if bar != nil {
-					bar.Add(1)
-				}
-
-				// Small delay to prevent system overload
-				time.Sleep(50 * time.Millisecond)
-			}
-
-			if bar != nil {
-				bar.Finish()
+			if len(cfg.RuffIgnorePaths) > 0 {
+				fmt.Printf("🚫 Ignored Ruff paths: %s\n", strings.Join(cfg.RuffIgnorePaths, ", "))
 			}
 		}
 	}
 
+	if len(issues) == 0 {
+		if !*quiet {
+			fmt.Printf("%s %s\n", MINI_COMPASS, successStyle.Render("Clean codebase - no issues found!"))
+		}
+	} else {
+		// Initialize data structures
+		authorStats = make(map[string]*types.AuthorStats)
+		fileStats = make(map[string]*types.FileStats)
+		ruleStats = make(map[string]*types.RuleStats)
+		var mu sync.Mutex
+
+		// Process issues
+		var bar *progressbar.ProgressBar
+		if !*quiet {
+			bar = progressbar.Default(int64(len(issues)))
+		}
+
+		semaphore := utils.NewSemaphore(cfg.GetConcurrency())
+		analyzer := analyzer.New(semaphore, &mu)
+
+		for _, issue := range issues {
+			if err := analyzer.ProcessIssueWithConfig(issue, cfg, authorStats, fileStats, ruleStats, &warningLogs); err != nil {
+				if *verbose {
+					fmt.Printf("Warning: Failed to process issue in %s:%d: %v\n", issue.FilePath, issue.Line, err)
+				}
+				continue
+			}
+			if bar != nil {
+				bar.Add(1)
+			}
+
+			// Small delay to prevent system overload
+			time.Sleep(50 * time.Millisecond)
+		}
+
+		if bar != nil {
+			bar.Finish()
+		}
+	}
+
 	if !*quiet {
-		fmt.Printf("\n%s %s\n", MINI_COMPASS, color.New(color.Bold).Sprint("Code Quality Navigation"))
+		fmt.Printf("\n%s %s\n", MINI_COMPASS, leaderboardTitleStyle.Render("Code Quality Navigation"))
 		fmt.Printf("%s\n", strings.Repeat("─", 50))
 	}
 
 	// Generate leaderboards with compass directions
 	if *showAuthors && len(issues) > 0 {
-		fmt.Printf("\n🧭 %s", color.New(color.FgYellow).Sprint("North: "))
+		fmt.Printf("\n🧭 %s", leaderboardTitleStyle.Foreground(lipgloss.Color("#FFFF00")).Render("North: "))
 		if needsESLint {
 			authorEntries := leaderboard.GenerateAuthorLeaderboard(authorStats, *topN)
 			leaderboard.PrintAuthorLeaderboard(authorEntries, *topN)
 			if *logHistory {
 				if err := history.WriteAuthorLeaderboardCSV(*logDir, authorEntries); err != nil {
-					fmt.Printf("❌ Failed to log author leaderboard: %v\n", err)
+					fmt.Printf("❌ Failed to log author leaderboard: %s\n", errorStyle.Render(err.Error()))
 				} else if !*quiet {
-					fmt.Printf("✅ Author leaderboard logged to %s\n", *logDir)
+					fmt.Printf("✅ Author leaderboard logged to %s\n", successStyle.Render(*logDir))
 				}
 			}
 		} else {
@@ -326,15 +409,15 @@ func main() {
 	}
 
 	if *showFiles {
-		fmt.Printf("\n🧭 %s", color.New(color.FgRed).Sprint("South: "))
+		fmt.Printf("\n🧭 %s", leaderboardTitleStyle.Foreground(lipgloss.Color("#FF0000")).Render("South: "))
 		if needsESLint {
 			fileEntries := leaderboard.GenerateFileLeaderboard(fileStats, *topN)
 			leaderboard.PrintFileLeaderboard(fileEntries, *topN)
 			if *logHistory {
 				if err := history.WriteFileLeaderboardCSV(*logDir, fileEntries); err != nil {
-					fmt.Printf("❌ Failed to log file leaderboard: %v\n", err)
+					fmt.Printf("❌ Failed to log file leaderboard: %s\n", errorStyle.Render(err.Error()))
 				} else if !*quiet {
-					fmt.Printf("✅ File leaderboard logged to %s\n", *logDir)
+					fmt.Printf("✅ File leaderboard logged to %s\n", successStyle.Render(*logDir))
 				}
 			}
 		} else {
@@ -343,15 +426,15 @@ func main() {
 	}
 
 	if *showRules {
-		fmt.Printf("\n🧭 %s", color.New(color.FgBlue).Sprint("East: "))
+		fmt.Printf("\n🧭 %s", leaderboardTitleStyle.Foreground(lipgloss.Color("#0000FF")).Render("East: "))
 		if needsESLint {
 			ruleEntries := leaderboard.GenerateRuleLeaderboard(ruleStats, *topN)
 			leaderboard.PrintRuleLeaderboard(ruleEntries, *topN)
 			if *logHistory {
 				if err := history.WriteRuleLeaderboardCSV(*logDir, ruleEntries); err != nil {
-					fmt.Printf("❌ Failed to log rule leaderboard: %v\n", err)
+					fmt.Printf("❌ Failed to log rule leaderboard: %s\n", errorStyle.Render(err.Error()))
 				} else if !*quiet {
-					fmt.Printf("✅ Rule leaderboard logged to %s\n", *logDir)
+					fmt.Printf("✅ Rule leaderboard logged to %s\n", successStyle.Render(*logDir))
 				}
 			}
 		} else {
@@ -360,157 +443,174 @@ func main() {
 	}
 
 	if *showLoc {
-		fmt.Printf("\n🧭 %s", color.New(color.FgGreen).Sprint("West: "))
+		fmt.Printf("\n🧭 %s", leaderboardTitleStyle.Foreground(lipgloss.Color("#00FF00")).Render("West: "))
 		locEntries := leaderboard.GenerateLinesOfCodeLeaderboard(filteredFiles, *topN)
 		leaderboard.PrintLinesOfCodeLeaderboard(locEntries, *topN)
 		if *logHistory {
 			if err := history.WriteLinesOfCodeLeaderboardCSV(*logDir, locEntries); err != nil {
-				fmt.Printf("❌ Failed to log lines of code leaderboard: %v\n", err)
+				fmt.Printf("❌ Failed to log lines of code leaderboard: %s\n", errorStyle.Render(err.Error()))
 			} else if !*quiet {
-				fmt.Printf("✅ Lines of code leaderboard logged to %s\n", *logDir)
+					fmt.Printf("✅ Lines of code leaderboard logged to %s\n", successStyle.Render(*logDir))
+				}
 			}
 		}
-	}
 
 	if *showCommits {
-		fmt.Printf("\n\xf0\x9f\x95\xb3 %s", color.New(color.FgMagenta).Sprint("NE: "))
+		fmt.Printf("\n%s %s", MINI_COMPASS, leaderboardTitleStyle.Foreground(lipgloss.Color("#FF00FF")).Render("NE: "))
 		commitEntries, err := leaderboard.GenerateCommitCountLeaderboard(*topN)
 		if err != nil {
-			fmt.Printf("❌ Failed to generate commit count leaderboard: %v\n", err)
+			fmt.Printf("❌ Failed to generate commit count leaderboard: %s\n", errorStyle.Render(err.Error()))
 		} else {
 			leaderboard.PrintCommitCountLeaderboard(commitEntries, *topN)
 			if *logHistory {
 				if err := history.WriteCommitCountLeaderboardCSV(*logDir, commitEntries); err != nil {
 					fmt.Printf("❌ Failed to log commit count leaderboard: %v\n", err)
 				} else if !*quiet {
-					fmt.Printf("✅ Commit count leaderboard logged to %s\n", *logDir)
+					fmt.Printf("✅ Commit count leaderboard logged to %s\n", successStyle.Render(*logDir))
 				}
 			}
 		}
 	}
 
 	if *showRecent {
-		fmt.Printf("\n⌛ %s", color.New(color.FgCyan).Sprint("NW: "))
+		fmt.Printf("\n%s %s", MINI_COMPASS, leaderboardTitleStyle.Foreground(lipgloss.Color("#00FFFF")).Render("NW: "))
 		recentEntries, err := leaderboard.GenerateRecentContributorsLeaderboard(*topN)
 		if err != nil {
-			fmt.Printf("❌ Failed to generate recent contributors leaderboard: %v\n", err)
+			fmt.Printf("❌ Failed to generate recent contributors leaderboard: %s\n", errorStyle.Render(err.Error()))
 		} else {
 			leaderboard.PrintRecentContributorsLeaderboard(recentEntries, *topN)
 			if *logHistory {
 				if err := history.WriteRecentContributorsLeaderboardCSV(*logDir, recentEntries); err != nil {
 					fmt.Printf("❌ Failed to log recent contributors leaderboard: %v\n", err)
 				} else if !*quiet {
-					fmt.Printf("✅ Recent contributors leaderboard logged to %s\n", *logDir)
+					fmt.Printf("✅ Recent contributors leaderboard logged to %s\n", successStyle.Render(*logDir))
 				}
 			}
 		}
 	}
 
 	if *showCoverage {
-		fmt.Printf("\n🧭 %s", color.New(color.FgHiGreen).Sprint("SE: "));
+		fmt.Printf("\n🧭 %s", leaderboardTitleStyle.Foreground(lipgloss.Color("#00FF00")).Render("SE: "))
 		coverageEntries, overallCoverage := leaderboard.GenerateCodeCoverageLeaderboard(filteredFiles, *coverageFile, *topN)
 		leaderboard.PrintCodeCoverageLeaderboard(coverageEntries, overallCoverage, *topN)
 		if *logHistory {
 			if err := history.WriteCodeCoverageLeaderboardCSV(*logDir, coverageEntries); err != nil {
-				fmt.Printf("❌ Failed to log code coverage leaderboard: %v\n", err)
+				fmt.Printf("❌ Failed to log code coverage leaderboard: %s\n", errorStyle.Render(err.Error()))
 			} else if !*quiet {
-				fmt.Printf("✅ Code coverage leaderboard logged to %s\n", *logDir)
+					fmt.Printf("✅ Code coverage leaderboard logged to %s\n", successStyle.Render(*logDir))
+				}
 			}
 		}
-	}
 
 	if *showChurn {
-		fmt.Printf("\n🧭 %s", color.New(color.FgHiYellow).Sprint("SW: "))
+		fmt.Printf("\n🧭 %s", leaderboardTitleStyle.Foreground(lipgloss.Color("#FFFF00")).Render("SW: "))
 		churnEntries, err := leaderboard.GenerateCodeChurnLeaderboard(filteredFiles, *topN)
 		if err != nil {
-			fmt.Printf("❌ Failed to generate code churn leaderboard: %v\n", err)
+			fmt.Printf("❌ Failed to generate code churn leaderboard: %s\n", errorStyle.Render(err.Error()))
 		} else {
 			leaderboard.PrintCodeChurnLeaderboard(churnEntries, *topN)
 			if *logHistory {
 				if err := history.WriteCodeChurnLeaderboardCSV(*logDir, churnEntries); err != nil {
 					fmt.Printf("❌ Failed to log code churn leaderboard: %v\n", err)
 				} else if !*quiet {
-					fmt.Printf("✅ Code churn leaderboard logged to %s\n", *logDir)
+					fmt.Printf("✅ Code churn leaderboard logged to %s\n", successStyle.Render(*logDir))
 				}
 			}
 		}
 	}
 
 	if *showBugs {
-		fmt.Printf("\n🧭 %s", color.New(color.FgHiRed).Sprint("SSE: "))
+		fmt.Printf("\n🧭 %s", leaderboardTitleStyle.Foreground(lipgloss.Color("#FF0000")).Render("SSE: "))
 		bugEntries, err := leaderboard.GenerateBugDensityLeaderboard(filteredFiles, *topN)
 		if err != nil {
-			fmt.Printf("❌ Failed to generate bug density leaderboard: %v\n", err)
+			fmt.Printf("❌ Failed to generate bug density leaderboard: %s\n", errorStyle.Render(err.Error()))
 		} else {
 			leaderboard.PrintBugDensityLeaderboard(bugEntries, *topN)
 			if *logHistory {
 				if err := history.WriteBugDensityLeaderboardCSV(*logDir, bugEntries); err != nil {
 					fmt.Printf("❌ Failed to log bug density leaderboard: %v\n", err)
 				} else if !*quiet {
-					fmt.Printf("✅ Bug density leaderboard logged to %s\n", *logDir)
+					fmt.Printf("✅ Bug density leaderboard logged to %s\n", successStyle.Render(*logDir))
 				}
 			}
 		}
 	}
 
 	if *showDebt {
-		fmt.Printf("\n\x43\x6f\x6d\x70\x61\x73\x73\x3a ")
+		fmt.Printf("\n%s %s", MINI_COMPASS, leaderboardTitleStyle.Render("SSW: "))
 		debtEntries, err := leaderboard.GenerateTechnicalDebtLeaderboard(filteredFiles, *topN)
 		if err != nil {
-			fmt.Printf("❌ Failed to generate technical debt leaderboard: %v\n", err)
+			fmt.Printf("❌ Failed to generate technical debt leaderboard: %s\n", errorStyle.Render(err.Error()))
 		} else {
 			leaderboard.PrintTechnicalDebtLeaderboard(debtEntries, *topN)
 			if *logHistory {
 				if err := history.WriteTechnicalDebtLeaderboardCSV(*logDir, debtEntries); err != nil {
 					fmt.Printf("❌ Failed to log technical debt leaderboard: %v\n", err)
 				} else if !*quiet {
-					fmt.Printf("✅ Technical debt leaderboard logged to %s\n", *logDir)
+					fmt.Printf("✅ Technical debt leaderboard logged to %s\n", successStyle.Render(*logDir))
 				}
 			}
 		}
 	}
 
 	if *showComplexity {
-		fmt.Printf("\n🧭 %s", color.New(color.FgHiBlue).Sprint("NNE: "))
+		fmt.Printf("\n🧭 %s", leaderboardTitleStyle.Foreground(lipgloss.Color("#0000FF")).Render("NNW: "))
 		fmt.Printf("Code complexity leaderboard coming soon!\n")
 	}
 
 	if *showSpellCheck {
-		fmt.Printf("\n🧭 %s", color.New(color.FgHiCyan).Sprint("ENE: "))
+		fmt.Printf("\n🧭 %s", leaderboardTitleStyle.Foreground(lipgloss.Color("#00FFFF")).Render("ENE: "))
 		spellEntries, spellAuthorStats, err := leaderboard.GenerateSpellCheckLeaderboard(filteredFiles, cfg, *topN)
 		if err != nil {
-			fmt.Printf("❌ Failed to generate spell check leaderboard: %v\n", err)
+			fmt.Printf("❌ Failed to generate spell check leaderboard: %s\n", errorStyle.Render(err.Error()))
 		} else {
 			leaderboard.PrintSpellCheckLeaderboard(spellEntries, spellAuthorStats, *topN)
 			if *logHistory {
 				if err := history.WriteSpellCheckLeaderboardCSV(*logDir, spellEntries); err != nil {
 					fmt.Printf("❌ Failed to log spell check leaderboard: %v\n", err)
 				} else if !*quiet {
-					fmt.Printf("✅ Spell check leaderboard logged to %s\n", *logDir)
+					fmt.Printf("✅ Spell check leaderboard logged to %s\n", successStyle.Render(*logDir))
 				}
 			}
 		}
 	}
 
+	if *showRuff {
+		fmt.Printf("\n\xe2\x90\x80 %s", leaderboardTitleStyle.Foreground(lipgloss.Color("#FFA500")).Render("WNW: "))
+		if len(ruffIssues) > 0 {
+			ruffRuleEntries := leaderboard.GenerateRuleLeaderboard(ruleStats, *topN)
+			leaderboard.PrintRuleLeaderboard(ruffRuleEntries, *topN)
+			if *logHistory {
+				if err := history.WriteRuleLeaderboardCSV(*logDir, ruffRuleEntries); err != nil {
+					fmt.Printf("❌ Failed to log Ruff rule leaderboard: %s\n", errorStyle.Render(err.Error()))
+				} else if !*quiet {
+					fmt.Printf("✅ Ruff rule leaderboard logged to %s\n", successStyle.Render(*logDir))
+				}
+			}
+		} else {
+			fmt.Println("No Ruff issues found.")
+		}
+	}
+
 	if *showSummary {
-		fmt.Printf("\n%s %s", MINI_COMPASS, color.New(color.Bold).Sprint("Center: "))
+		fmt.Printf("\n%s %s", MINI_COMPASS, leaderboardTitleStyle.Render("Center: "))
 		leaderboard.GenerateSummaryStats(authorStats, fileStats, ruleStats)
 	}
 
 	if len(warningLogs) > 0 && !*quiet {
-		fmt.Printf("\n%s %s\n", MINI_COMPASS, color.YellowString("Navigation Warnings:"))
+		fmt.Printf("\n%s %s\n", MINI_COMPASS, warningStyle.Render("Navigation Warnings:"))
 		for _, warn := range warningLogs {
-			fmt.Printf("  %s\n", color.New(color.FgHiBlack).Sprint(warn))
+			fmt.Printf("  %s\n", infoStyle.Render(warn))
 		}
 	}
 
 	if *verbose {
-		fmt.Printf("\n%s %s\n", MINI_COMPASS, color.GreenString("Navigation completed successfully!"))
+		fmt.Printf("\n%s %s\n", MINI_COMPASS, successStyle.Render("Navigation completed successfully!"))
 	}
 }
 
 func showCompassArt() {
-	fmt.Print(color.CyanString(`
+	fmt.Print(compassArtStyle.Render(`
         🧭 CodeCompass 🧭
              
             ╭─────╮
@@ -531,65 +631,67 @@ func showCompassArt() {
     📈 Monitor Progress
 `))
 
-	fmt.Println(color.New(color.Bold).Sprint("\nCodeCompass v" + VERSION))
-	fmt.Println("Your comprehensive code quality navigation tool")
+	fmt.Println(logoStyle.Render("\nCodeCompass v" + VERSION))
+	fmt.Println(infoStyle.Render("Your comprehensive code quality navigation tool"))
+	fmt.Println(infoStyle.Render("Navigate your codebase with precision and insight"))
 }
 
 func showVersion() {
-	fmt.Printf("%s %s v%s\n", MINI_COMPASS, PROJECT_NAME, VERSION)
-	fmt.Printf("A comprehensive code quality navigation tool\n")
-	fmt.Printf("Navigate your codebase with precision and insight\n")
-	fmt.Printf("Built with Go - https://github.com/your-org/codecompass\n")
+	fmt.Printf("%s %s v%s\n", MINI_COMPASS, PROJECT_NAME, versionStyle.Render(VERSION))
+	fmt.Println(infoStyle.Render("A comprehensive code quality navigation tool"))
+	fmt.Println(infoStyle.Render("Navigate your codebase with precision and insight"))
+	fmt.Println(infoStyle.Render("Built with Go - https://github.com/your-org/codecompass"))
 }
 
 func showUsage() {
-	fmt.Print(color.CyanString(COMPASS_ART))
-	fmt.Printf("%s\n", color.New(color.Bold).Sprint("CodeCompass - Navigate Your Code Quality"))
-	fmt.Printf("\n%s\n", color.BlueString("USAGE:"))
+	fmt.Print(compassArtStyle.Render(COMPASS_ART))
+	fmt.Println(leaderboardTitleStyle.Render("CodeCompass - Navigate Your Code Quality"))
+	fmt.Println(usageHeaderStyle.Render("\nUSAGE:"))
 	fmt.Printf("  %s [OPTIONS] [DIRECTORY]\n\n", os.Args[0])
 
-	fmt.Printf("%s\n", color.BlueString("ARGUMENTS:"))
-	fmt.Printf("  DIRECTORY              Target git repository directory (default: current directory)\n\n")
+	fmt.Println(usageHeaderStyle.Render("ARGUMENTS:"))
+	fmt.Println(infoStyle.Render("  DIRECTORY              Target git repository directory (default: current directory)\n"))
 
-	fmt.Printf("%s\n", color.BlueString("COMPASS DIRECTIONS (Leaderboards):"))
-		fmt.Printf("  🧭 North    --authors              Author leaderboard (lint issue contributors)\n")
-		fmt.Printf("  🧭 South    --files                File leaderboard (most problematic files)\n")
-		fmt.Printf("  🧭 East     --rules                Rule leaderboard (most violated rules)\n")
-		fmt.Printf("  🧭 West     --loc                  Lines of code leaderboard\n")
-		fmt.Printf("  🧭 NE       --commits              Regular commit count leaderboard (non-merges)\n")
-		fmt.Printf("  🧭 NNE      --merges               Merge commit count leaderboard\n")
-		fmt.Printf("  🧭 NW       --recent               Recent contributors leaderboard\n")
-		fmt.Printf("  🧭 SE       --coverage             Code coverage leaderboard\n")
-		fmt.Printf("  🧭 SW       --churn                Code churn leaderboard\n")
-		fmt.Printf("  🧭 SSE      --bugs                 Bug density leaderboard\n")
-		fmt.Printf("  🧭 SSW      --debt                 Technical debt leaderboard\n")
-		fmt.Printf("  🧭 NNW      --complexity           Code complexity leaderboard (coming soon)\n")
-		fmt.Printf("  🧭 ENE      --spellcheck           Spell check leaderboard\n")
-		fmt.Printf("  🧭 Center   --summary              Repository summary\n\n")
+	fmt.Println(usageHeaderStyle.Render("COMPASS DIRECTIONS (Leaderboards):"))
+	fmt.Printf("  %s North    --authors              Author leaderboard (lint issue contributors)\n", MINI_COMPASS)
+	fmt.Printf("  %s South    --files                File leaderboard (most problematic files)\n", MINI_COMPASS)
+	fmt.Printf("  %s East     --rules                Rule leaderboard (most violated rules)\n", MINI_COMPASS)
+	fmt.Printf("  %s West     --loc                  Lines of code leaderboard\n", MINI_COMPASS)
+	fmt.Printf("  %s NE       --commits              Regular commit count leaderboard (non-merges)\n", MINI_COMPASS)
+	fmt.Printf("  %s NNE      --merges               Merge commit count leaderboard\n", MINI_COMPASS)
+	fmt.Printf("  %s NW       --recent               Recent contributors leaderboard\n", MINI_COMPASS)
+	fmt.Printf("  %s SE       --coverage             Code coverage leaderboard\n", MINI_COMPASS)
+	fmt.Printf("  %s SW       --churn                Code churn leaderboard\n", MINI_COMPASS)
+	fmt.Printf("  %s SSE      --bugs                 Bug density leaderboard\n", MINI_COMPASS)
+	fmt.Printf("  %s SSW      --debt                 Technical debt leaderboard\n", MINI_COMPASS)
+	fmt.Printf("  %s NNW      --complexity           Code complexity leaderboard (coming soon)\n", MINI_COMPASS)
+	fmt.Printf("  %s ENE      --spellcheck           Spell check leaderboard\n", MINI_COMPASS)
+		fmt.Printf("  %s WNW      --ruff                   Ruff (Python) leaderboard\n", MINI_COMPASS)
+		fmt.Printf("  %s Center   --summary              Repository summary\n\n", MINI_COMPASS)
 
-	fmt.Printf("%s\n", color.BlueString("CONFIGURATION OPTIONS:"))
-	fmt.Printf("  --config FILE          Path to configuration file (.codecompass.rc)\n")
-	fmt.Printf("  --generate-config      Generate a sample configuration file\n")
-	fmt.Printf("  --show-config          Show current configuration and exit\n")
-	fmt.Printf("  --top N                Number of entries to show in leaderboards (default: 15)\n")
-	fmt.Printf("  --ignore RULES         Comma-separated ESLint rules to ignore\n")
-	fmt.Printf("  --coverage-file FILE   Path to coverage file (auto-detected if not specified)\n\n")
+	fmt.Println(usageHeaderStyle.Render("CONFIGURATION OPTIONS:"))
+	fmt.Println(infoStyle.Render("  --config FILE          Path to configuration file (.codecompass.rc)"))
+	fmt.Println(infoStyle.Render("  --generate-config      Generate a sample configuration file"))
+	fmt.Println(infoStyle.Render("  --show-config          Show current configuration and exit"))
+	fmt.Println(infoStyle.Render("  --top N                Number of entries to show in leaderboards (default: 15)"))
+	fmt.Println(infoStyle.Render("  --ignore RULES         Comma-separated ESLint rules to ignore"))
+	fmt.Println(infoStyle.Render("  --coverage-file FILE   Path to coverage file (auto-detected if not specified)\n"))
 
-	fmt.Printf("%s\n", color.BlueString("DISPLAY OPTIONS:"))
-	fmt.Printf("  --logo                 Show CodeCompass ASCII art\n")
-	fmt.Printf("  --cache                Enable caching for better performance (default: true)\n")
-	fmt.Printf("  --verbose              Enable verbose output\n")
-	fmt.Printf("  --quiet                Suppress non-essential output\n\n")
+	fmt.Println(usageHeaderStyle.Render("DISPLAY OPTIONS:"))
+	fmt.Println(infoStyle.Render("  --logo                 Show CodeCompass ASCII art"))
+	fmt.Println(infoStyle.Render("  --cache                Enable caching for better performance (default: true)"))
+	fmt.Println(infoStyle.Render("  --verbose              Enable verbose output"))
+	fmt.Println(infoStyle.Render("  --quiet                Suppress non-essential output\n"))
 
-	fmt.Printf("%s\n", color.BlueString("HISTORY LOGGING OPTIONS:"))
-	fmt.Printf("  --log-history          Enable logging of leaderboard data to CSV files\n")
-	fmt.Printf("  --log-dir DIR          Directory to save leaderboard CSV logs (default: .codecompass/history)\n\n")
+	fmt.Println(usageHeaderStyle.Render("HISTORY LOGGING OPTIONS:"))
+	fmt.Println(infoStyle.Render("  --log-history          Enable logging of leaderboard data to CSV files"))
+	fmt.Println(infoStyle.Render("  --log-dir DIR          Directory to save leaderboard CSV logs (default: .codecompass/history)\n"))
 
-	fmt.Printf("%s\n", color.BlueString("OTHER OPTIONS:"))
-	fmt.Printf("  -h, --help             Show this help message\n")
-	fmt.Printf("  -v, --version          Show version information\n\n")
+	fmt.Println(usageHeaderStyle.Render("OTHER OPTIONS:"))
+	fmt.Println(infoStyle.Render("  -h, --help             Show this help message"))
+	fmt.Println(infoStyle.Render("  -v, --version          Show version information\n"))
 
-	fmt.Printf("%s\n", color.BlueString("NAVIGATION EXAMPLES:"))
+	fmt.Println(usageHeaderStyle.Render("NAVIGATION EXAMPLES:"))
 	fmt.Printf("  %s --all                              # Full compass navigation (all leaderboards)\n", os.Args[0])
 	fmt.Printf("  %s                                     # Show help message\n", os.Args[0])
 	fmt.Printf("  %s /path/to/repo --commits --merges   # Navigate specific repository and compare commits\n", os.Args[0])
@@ -597,11 +699,14 @@ func showUsage() {
 	fmt.Printf("  %s --loc --coverage                   # West & SE directions (no ESLint)\n", os.Args[0])
 	fmt.Printf("  %s --generate-config                  # Create .codecompass.rc file\n\n", os.Args[0])
 
-	fmt.Printf("%s\n", color.BlueString("CONFIGURATION FILE:"))
-	fmt.Printf("  CodeCompass looks for configuration files in this order:\n")
-	fmt.Printf("  1. .codecompass.rc\n")
-	fmt.Printf("  2. .codecompass.config\n")
-	fmt.Printf("  3. codecompass.config\n\n")
+	fmt.Println(usageHeaderStyle.Render("CONFIGURATION FILE:"))
+	fmt.Println(infoStyle.Render("  CodeCompass looks for configuration files in this order:"))
+	fmt.Println(infoStyle.Render("  1. .codecompass.rc"))
+	fmt.Println(infoStyle.Render("  2. .codecompass.config"))
+	fmt.Println(infoStyle.Render("  3. codecompass.config\n"))
 
-	fmt.Printf("  Use --generate-config to create a sample configuration file.\n")
+	fmt.Println(infoStyle.Render("  Use --generate-config to create a sample configuration file."))
 }
+
+
+

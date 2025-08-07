@@ -17,6 +17,7 @@ type Issue struct {
 	FilePath string
 	Line     int
 	RuleID   string
+	Message  string
 	Severity int
 }
 

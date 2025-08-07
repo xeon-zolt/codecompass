@@ -17,7 +17,7 @@ import (
 	"codecompass/internal/spellcheck"
 	"codecompass/internal/types"
 
-	"github.com/fatih/color"
+	"github.com/charmbracelet/lipgloss"
 )
 
 func GenerateAuthorLeaderboard(authorStats map[string]*types.AuthorStats, topN int) []types.LeaderboardEntry {
@@ -173,7 +173,7 @@ func GenerateRecentContributorsLeaderboard(topN int) ([]types.RecentContributorE
 }
 
 func GenerateSummaryStats(authorStats map[string]*types.AuthorStats, fileStats map[string]*types.FileStats, ruleStats map[string]*types.RuleStats) {
-	fmt.Printf("\n📋 %s\n", color.New(color.Bold).Sprint("Repository Summary:"))
+	fmt.Println(titleStyle.Render("Repository Summary"))
 
 	totalIssues := 0
 	totalErrors := 0
@@ -185,24 +185,24 @@ func GenerateSummaryStats(authorStats map[string]*types.AuthorStats, fileStats m
 		totalWarnings += stats.Warnings
 	}
 
-	fmt.Printf("  • Total Issues: %s\n", color.New(color.Bold).Sprintf("%d", totalIssues))
+	fmt.Printf("  • Total Issues: %s\n", cellStyle.Render(fmt.Sprintf("%d", totalIssues)))
 	fmt.Printf("  • Errors: %s, Warnings: %s\n",
-		color.RedString("%d", totalErrors),
-		color.YellowString("%d", totalWarnings))
-	fmt.Printf("  • Authors with issues: %s\n", color.New(color.Bold).Sprintf("%d", len(authorStats)))
-	fmt.Printf("  • Files with issues: %s\n", color.New(color.Bold).Sprintf("%d", len(fileStats)))
-	fmt.Printf("  • Unique rule violations: %s\n", color.New(color.Bold).Sprintf("%d", len(ruleStats)))
+		errorStyle.Render(fmt.Sprintf("%d", totalErrors)),
+		warningStyle.Render(fmt.Sprintf("%d", totalWarnings)))
+	fmt.Printf("  • Authors with issues: %s\n", cellStyle.Render(fmt.Sprintf("%d", len(authorStats))))
+	fmt.Printf("  • Files with issues: %s\n", cellStyle.Render(fmt.Sprintf("%d", len(fileStats))))
+	fmt.Printf("  • Unique rule violations: %s\n", cellStyle.Render(fmt.Sprintf("%d", len(ruleStats))))
 
 	if len(authorStats) > 0 {
 		avgIssuesPerAuthor := float64(totalIssues) / float64(len(authorStats))
 		fmt.Printf("  • Average issues per author: %s\n",
-			color.New(color.Bold).Sprintf("%.1f", avgIssuesPerAuthor))
+			cellStyle.Render(fmt.Sprintf("%.1f", avgIssuesPerAuthor)))
 	}
 
 	if len(fileStats) > 0 {
 		avgIssuesPerFile := float64(totalIssues) / float64(len(fileStats))
 		fmt.Printf("  • Average issues per file: %s\n",
-			color.New(color.Bold).Sprintf("%.1f", avgIssuesPerFile))
+			cellStyle.Render(fmt.Sprintf("%.1f", avgIssuesPerFile)))
 	}
 }
 
@@ -481,20 +481,55 @@ func formatDuration(d time.Duration) string {
 
 func formatNetLines(net int) string {
 	if net > 0 {
-		return color.GreenString("+%d", net)
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF00")).Render(fmt.Sprintf("+%d", net))
 	} else if net < 0 {
-		return color.RedString("%d", net)
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("#FF0000")).Render(fmt.Sprintf("%d", net))
 	}
-	return color.New(color.FgHiBlack).Sprint("0")
+	return lipgloss.NewStyle().Foreground(lipgloss.Color("#878787")).Render("0")
 }
 
 // Print functions (moved from main.go for better organization)
 
+var (
+	titleStyle = lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("#FAFAFA")).
+		Background(lipgloss.Color("#5d5d5d")).
+		PaddingLeft(1).
+		PaddingRight(1)
+
+	headerStyle = lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("#FAFAFA"))
+
+	cellStyle = lipgloss.NewStyle().
+		PaddingLeft(1).
+		PaddingRight(1)
+
+	rankStyle = cellStyle.Copy().
+		Foreground(lipgloss.Color("#878787"))
+
+	nameStyle = cellStyle.Copy().
+		Foreground(lipgloss.Color("#d75f00"))
+
+	emailStyle = cellStyle.Copy().
+		Foreground(lipgloss.Color("#878787"))
+
+	topRuleStyle = cellStyle.Copy().
+		Foreground(lipgloss.Color("#ffd700"))
+
+	errorStyle = cellStyle.Copy().
+		Foreground(lipgloss.Color("#ff0000"))
+
+	warningStyle = cellStyle.Copy().
+		Foreground(lipgloss.Color("#ffff00"))
+)
+
 func PrintAuthorLeaderboard(entries []types.LeaderboardEntry, topN int) {
-	fmt.Printf("\n🏆 %s\n", color.New(color.Bold).Sprint("Author Leaderboard - Most ESLint Issues:"))
+	fmt.Println(titleStyle.Render("Author Leaderboard - Most ESLint Issues"))
 
 	if len(entries) == 0 {
-		fmt.Println(color.GreenString("🎉 Everyone's clean. No one to shame."))
+		fmt.Println(cellStyle.Render("🎉 Everyone's clean. No one to shame."))
 		return
 	}
 
@@ -505,23 +540,20 @@ func PrintAuthorLeaderboard(entries []types.LeaderboardEntry, topN int) {
 
 	for i := 0; i < maxEntries; i++ {
 		entry := entries[i]
-		rank := fmt.Sprintf("%2d", i+1)
-		name := color.RedString(entry.Name)
-		email := color.New(color.FgHiBlack).Sprintf("(%s)", entry.Email)
-		topRule := color.YellowString(entry.TopRule)
-		errorColor := color.New(color.FgRed)
-		warningColor := color.New(color.FgYellow)
+		rank := rankStyle.Render(fmt.Sprintf("%2d", i+1))
+		name := nameStyle.Render(entry.Name)
+		email := emailStyle.Render(fmt.Sprintf("(%s)", entry.Email))
+		topRule := topRuleStyle.Render(entry.TopRule)
+		errors := errorStyle.Render(fmt.Sprintf("%d", entry.Errors))
+		warnings := warningStyle.Render(fmt.Sprintf("%d", entry.Warnings))
 
 		fmt.Printf("%s. %s %s – %d issues (%s errors, %s warnings), %d files, top rule: %s (%d)\n",
-			rank, name, email, entry.Count,
-			errorColor.Sprintf("%d", entry.Errors),
-			warningColor.Sprintf("%d", entry.Warnings),
-			entry.Files, topRule, entry.TopCount)
+			rank, name, email, entry.Count, errors, warnings, entry.Files, topRule, entry.TopCount)
 	}
 }
 
 func PrintFileLeaderboard(entries []types.FileLeaderboardEntry, topN int) {
-	fmt.Printf("\n📁 %s\n", color.New(color.Bold).Sprint("File Leaderboard - Most Problematic Files:"))
+	fmt.Println(titleStyle.Render("File Leaderboard - Most Problematic Files"))
 
 	maxEntries := topN
 	if len(entries) < maxEntries {
@@ -530,9 +562,9 @@ func PrintFileLeaderboard(entries []types.FileLeaderboardEntry, topN int) {
 
 	for i := 0; i < maxEntries; i++ {
 		entry := entries[i]
-		rank := fmt.Sprintf("%2d", i+1)
-		path := color.CyanString(entry.Path)
-		topRule := color.YellowString(entry.TopRule)
+		rank := rankStyle.Render(fmt.Sprintf("%2d", i+1))
+		path := cellStyle.Render(entry.Path)
+		topRule := topRuleStyle.Render(entry.TopRule)
 
 		fmt.Printf("%s. %s – %d issues, %d authors, top rule: %s (%d)\n",
 			rank, path, entry.Count, entry.Authors, topRule, entry.TopCount)
@@ -540,7 +572,7 @@ func PrintFileLeaderboard(entries []types.FileLeaderboardEntry, topN int) {
 }
 
 func PrintRuleLeaderboard(entries []types.RuleLeaderboardEntry, topN int) {
-	fmt.Printf("\n📏 %s\n", color.New(color.Bold).Sprint("Rule Leaderboard - Most Violated Rules:"))
+	fmt.Println(titleStyle.Render("Rule Leaderboard - Most Violated Rules"))
 
 	maxEntries := topN
 	if len(entries) < maxEntries {
@@ -549,8 +581,8 @@ func PrintRuleLeaderboard(entries []types.RuleLeaderboardEntry, topN int) {
 
 	for i := 0; i < maxEntries; i++ {
 		entry := entries[i]
-		rank := fmt.Sprintf("%2d", i+1)
-		rule := color.MagentaString(entry.Rule)
+		rank := rankStyle.Render(fmt.Sprintf("%2d", i+1))
+		rule := cellStyle.Render(entry.Rule)
 
 		fmt.Printf("%s. %s – %d violations, %d authors, %d files\n",
 			rank, rule, entry.Count, entry.Authors, entry.Files)
@@ -558,7 +590,7 @@ func PrintRuleLeaderboard(entries []types.RuleLeaderboardEntry, topN int) {
 }
 
 func PrintLinesOfCodeLeaderboard(entries []types.LinesOfCodeEntry, topN int) {
-	fmt.Printf("\n📝 %s\n", color.New(color.Bold).Sprint("Lines of Code Leaderboard - Largest Files:"))
+	fmt.Println(titleStyle.Render("Lines of Code Leaderboard - Largest Files"))
 
 	maxEntries := topN
 	if len(entries) < maxEntries {
@@ -567,22 +599,20 @@ func PrintLinesOfCodeLeaderboard(entries []types.LinesOfCodeEntry, topN int) {
 
 	for i := 0; i < maxEntries; i++ {
 		entry := entries[i]
-		rank := fmt.Sprintf("%2d", i+1)
-		path := color.GreenString(entry.Path)
-		size := formatFileSize(entry.Size)
+		rank := rankStyle.Render(fmt.Sprintf("%2d", i+1))
+		path := cellStyle.Render(entry.Path)
+		size := emailStyle.Render(formatFileSize(entry.Size))
 
 		fmt.Printf("%s. %s – %s lines (%s)\n",
-			rank, path,
-			color.New(color.Bold).Sprintf("%d", entry.Lines),
-			color.New(color.FgHiBlack).Sprint(size))
+			rank, path, cellStyle.Render(fmt.Sprintf("%d", entry.Lines)), size)
 	}
 }
 
 func PrintCommitCountLeaderboard(entries []types.CommitCountEntry, topN int) {
-	fmt.Printf("\n📊 %s\n", color.New(color.Bold).Sprint("Commit Count Leaderboard - Most Active Contributors:"))
+	fmt.Println(titleStyle.Render("Commit Count Leaderboard - Most Active Contributors"))
 
 	if len(entries) == 0 {
-		fmt.Printf("  %s No commit data found\n", color.YellowString("📭"))
+		fmt.Println(cellStyle.Render("📭 No commit data found"))
 		return
 	}
 
@@ -593,23 +623,21 @@ func PrintCommitCountLeaderboard(entries []types.CommitCountEntry, topN int) {
 
 	for i := 0; i < maxEntries; i++ {
 		entry := entries[i]
-		rank := fmt.Sprintf("%2d", i+1)
-		name := color.BlueString(entry.Name)
-		email := color.New(color.FgHiBlack).Sprintf("(%s)", entry.Email)
-		timespan := entry.LastCommit.Sub(entry.FirstCommit)
+		rank := rankStyle.Render(fmt.Sprintf("%2d", i+1))
+		name := nameStyle.Render(entry.Name)
+		email := emailStyle.Render(fmt.Sprintf("(%s)", entry.Email))
+		timespan := emailStyle.Render(formatDuration(entry.LastCommit.Sub(entry.FirstCommit)))
 
 		fmt.Printf("%s. %s %s – %s commits (active for %s)\n",
-			rank, name, email,
-			color.New(color.Bold).Sprintf("%d", entry.Commits),
-			color.New(color.FgHiBlack).Sprint(formatDuration(timespan)))
+			rank, name, email, cellStyle.Render(fmt.Sprintf("%d", entry.Commits)), timespan)
 	}
 }
 
 func PrintRecentContributorsLeaderboard(entries []types.RecentContributorEntry, topN int) {
-	fmt.Printf("\n🕒 %s\n", color.New(color.Bold).Sprint("Recent Contributors Leaderboard - Most Active in Last 30 Days:"))
+	fmt.Println(titleStyle.Render("Recent Contributors Leaderboard - Most Active in Last 30 Days"))
 
 	if len(entries) == 0 {
-		fmt.Printf("  %s No commits in the last 30 days\n", color.YellowString("📭"))
+		fmt.Println(cellStyle.Render("📭 No commits in the last 30 days"))
 		return
 	}
 
@@ -620,23 +648,21 @@ func PrintRecentContributorsLeaderboard(entries []types.RecentContributorEntry, 
 
 	for i := 0; i < maxEntries; i++ {
 		entry := entries[i]
-		rank := fmt.Sprintf("%2d", i+1)
-		name := color.MagentaString(entry.Name)
-		email := color.New(color.FgHiBlack).Sprintf("(%s)", entry.Email)
-		lastCommitAgo := time.Since(entry.LastCommit)
+		rank := rankStyle.Render(fmt.Sprintf("%2d", i+1))
+		name := nameStyle.Render(entry.Name)
+		email := emailStyle.Render(fmt.Sprintf("(%s)", entry.Email))
+		lastCommitAgo := emailStyle.Render(formatDuration(time.Since(entry.LastCommit)))
 
 		fmt.Printf("%s. %s %s – %s commits (last: %s ago)\n",
-			rank, name, email,
-			color.New(color.Bold).Sprintf("%d", entry.RecentCommits),
-			color.New(color.FgHiBlack).Sprint(formatDuration(lastCommitAgo)))
+			rank, name, email, cellStyle.Render(fmt.Sprintf("%d", entry.RecentCommits)), lastCommitAgo)
 	}
 }
 
 func PrintCodeChurnLeaderboard(entries []types.ChurnEntry, topN int) {
-	fmt.Printf("\n🔄 %s\n", color.New(color.Bold).Sprint("Code Churn Leaderboard - Most Frequently Changed Files:"))
+	fmt.Println(titleStyle.Render("Code Churn Leaderboard - Most Frequently Changed Files"))
 
 	if len(entries) == 0 {
-		fmt.Printf("  %s No churn data found\n", color.YellowString("📭"))
+		fmt.Println(cellStyle.Render("📭 No churn data found"))
 		return
 	}
 
@@ -647,23 +673,22 @@ func PrintCodeChurnLeaderboard(entries []types.ChurnEntry, topN int) {
 
 	for i := 0; i < maxEntries; i++ {
 		entry := entries[i]
-		rank := fmt.Sprintf("%2d", i+1)
-		path := color.CyanString(entry.Path)
+		rank := rankStyle.Render(fmt.Sprintf("%2d", i+1))
+		path := cellStyle.Render(entry.Path)
 
 		fmt.Printf("%s. %s – %s changes (%s lines added, %s deleted, net: %s)\n",
-			rank, path,
-			color.New(color.Bold).Sprintf("%d", entry.Changes),
-			color.GreenString("%d", entry.AddedLines),
-			color.RedString("%d", entry.DeletedLines),
+			rank, path, cellStyle.Render(fmt.Sprintf("%d", entry.Changes)),
+			cellStyle.Render(fmt.Sprintf("%d", entry.AddedLines)),
+			cellStyle.Render(fmt.Sprintf("%d", entry.DeletedLines)),
 			formatNetLines(entry.NetLines))
 	}
 }
 
 func PrintBugDensityLeaderboard(entries []types.BugDensityEntry, topN int) {
-	fmt.Printf("\n🐛 %s\n", color.New(color.Bold).Sprint("Bug Density Leaderboard - Files with Highest Bug-Fix Ratio:"))
+	fmt.Println(titleStyle.Render("Bug Density Leaderboard - Files with Highest Bug-Fix Ratio"))
 
 	if len(entries) == 0 {
-		fmt.Printf("  %s No bug density data found\n", color.YellowString("📭"))
+		fmt.Println(cellStyle.Render("📭 No bug density data found"))
 		return
 	}
 
@@ -674,30 +699,29 @@ func PrintBugDensityLeaderboard(entries []types.BugDensityEntry, topN int) {
 
 	for i := 0; i < maxEntries; i++ {
 		entry := entries[i]
-		rank := fmt.Sprintf("%2d", i+1)
-		path := color.CyanString(entry.Path)
+		rank := rankStyle.Render(fmt.Sprintf("%2d", i+1))
+		path := cellStyle.Render(entry.Path)
 
-		var ratioColor *color.Color
+		var ratioStyle lipgloss.Style
 		if entry.BugRatio > 30 {
-			ratioColor = color.New(color.FgRed)
+			ratioStyle = errorStyle
 		} else if entry.BugRatio > 15 {
-			ratioColor = color.New(color.FgYellow)
+			ratioStyle = warningStyle
 		} else {
-			ratioColor = color.New(color.FgGreen)
+			ratioStyle = cellStyle
 		}
 
 		fmt.Printf("%s. %s – %s bug-fix ratio (%d fixes out of %d commits)\n",
-			rank, path,
-			ratioColor.Sprintf("%.1f%%", entry.BugRatio),
+			rank, path, ratioStyle.Render(fmt.Sprintf("%.1f%%", entry.BugRatio)),
 			entry.BugFixes, entry.TotalCommits)
 	}
 }
 
 func PrintTechnicalDebtLeaderboard(entries []types.TechnicalDebtEntry, topN int) {
-	fmt.Printf("\n💸 %s\n", color.New(color.Bold).Sprint("Technical Debt Leaderboard - Files with Most TODO/FIXME/HACK Comments:"))
+	fmt.Println(titleStyle.Render("Technical Debt Leaderboard - Files with Most TODO/FIXME/HACK Comments"))
 
 	if len(entries) == 0 {
-		fmt.Printf("  %s No technical debt found (or you have very clean code!)\n", color.GreenString("🎉"))
+		fmt.Println(cellStyle.Render("🎉 No technical debt found (or you have very clean code!)"))
 		return
 	}
 
@@ -708,32 +732,30 @@ func PrintTechnicalDebtLeaderboard(entries []types.TechnicalDebtEntry, topN int)
 
 	for i := 0; i < maxEntries; i++ {
 		entry := entries[i]
-		rank := fmt.Sprintf("%2d", i+1)
-		path := color.CyanString(entry.Path)
+		rank := rankStyle.Render(fmt.Sprintf("%2d", i+1))
+		path := cellStyle.Render(entry.Path)
 
 		var debtItems []string
 		if entry.TodoCount > 0 {
-			debtItems = append(debtItems, color.YellowString("%d TODOs", entry.TodoCount))
+			debtItems = append(debtItems, warningStyle.Render(fmt.Sprintf("%d TODOs", entry.TodoCount)))
 		}
 		if entry.FixmeCount > 0 {
-			debtItems = append(debtItems, color.RedString("%d FIXMEs", entry.FixmeCount))
+			debtItems = append(debtItems, errorStyle.Render(fmt.Sprintf("%d FIXMEs", entry.FixmeCount)))
 		}
 		if entry.HackCount > 0 {
-			debtItems = append(debtItems, color.MagentaString("%d HACKs", entry.HackCount))
+			debtItems = append(debtItems, topRuleStyle.Render(fmt.Sprintf("%d HACKs", entry.HackCount)))
 		}
 
 		fmt.Printf("%s. %s – %s total debt (%s)\n",
-			rank, path,
-			color.New(color.Bold).Sprintf("%d", entry.TotalDebt),
-			strings.Join(debtItems, ", "))
+			rank, path, cellStyle.Render(fmt.Sprintf("%d", entry.TotalDebt)), strings.Join(debtItems, ", "))
 	}
 }
 
 func PrintCodeCoverageLeaderboard(entries []types.CoverageEntry, overallCoverage float64, topN int) {
-	fmt.Printf("\n📈 %s\n", color.New(color.Bold).Sprint("Code Coverage Leaderboard - Coverage by File:"))
+	fmt.Println(titleStyle.Render("Code Coverage Leaderboard - Coverage by File"))
 
 	if len(entries) == 0 {
-		fmt.Printf("  %s No coverage data found for tracked files\n", color.YellowString("📭"))
+		fmt.Println(cellStyle.Render("📭 No coverage data found for tracked files"))
 		return
 	}
 
@@ -742,57 +764,48 @@ func PrintCodeCoverageLeaderboard(entries []types.CoverageEntry, overallCoverage
 		maxEntries = len(entries)
 	}
 
-	fmt.Printf("  %s (Showing files with lowest coverage - need attention)\n",
-		color.New(color.FgHiBlack).Sprint("Sorted by coverage percentage"))
+	fmt.Println(emailStyle.Render("  (Showing files with lowest coverage - need attention)"))
 
 	for i := 0; i < maxEntries; i++ {
 		entry := entries[i]
-		rank := fmt.Sprintf("%2d", i+1)
-		path := color.CyanString(entry.Path)
+		rank := rankStyle.Render(fmt.Sprintf("%2d", i+1))
+		path := cellStyle.Render(entry.Path)
 
-		// Color-code coverage percentage
-		var coverageColor *color.Color
+		var coverageStyle lipgloss.Style
 		if entry.CoveragePercent >= 80 {
-			coverageColor = color.New(color.FgGreen)
+			coverageStyle = cellStyle
 		} else if entry.CoveragePercent >= 60 {
-			coverageColor = color.New(color.FgYellow)
+			coverageStyle = warningStyle
 		} else {
-			coverageColor = color.New(color.FgRed)
+			coverageStyle = errorStyle
 		}
 
-		coverageStr := coverageColor.Sprintf("%.1f%%", entry.CoveragePercent)
+		coverageStr := coverageStyle.Render(fmt.Sprintf("%.1f%%", entry.CoveragePercent))
 
-		// Build additional info
 		var additionalInfo []string
 		if entry.LinesTotal > 0 {
-			additionalInfo = append(additionalInfo, 
-				fmt.Sprintf("%d/%d lines", entry.LinesCovered, entry.LinesTotal))
+			additionalInfo = append(additionalInfo, fmt.Sprintf("%d/%d lines", entry.LinesCovered, entry.LinesTotal))
 		}
 		if entry.FunctionsTotal > 0 {
 			functionsPercent := float64(entry.FunctionsCovered) / float64(entry.FunctionsTotal) * 100
-			additionalInfo = append(additionalInfo, 
-				fmt.Sprintf("%.0f%% functions", functionsPercent))
+			additionalInfo = append(additionalInfo, fmt.Sprintf("%.0f%% functions", functionsPercent))
 		}
 		if entry.BranchesTotal > 0 {
 			branchesPercent := float64(entry.BranchesCovered) / float64(entry.BranchesTotal) * 100
-			additionalInfo = append(additionalInfo, 
-				fmt.Sprintf("%.0f%% branches", branchesPercent))
+			additionalInfo = append(additionalInfo, fmt.Sprintf("%.0f%% branches", branchesPercent))
 		}
 
 		infoStr := ""
 		if len(additionalInfo) > 0 {
-			infoStr = fmt.Sprintf(" (%s)",
-				color.New(color.FgHiBlack).Sprint(strings.Join(additionalInfo, ", ")))
+			infoStr = fmt.Sprintf(" (%s)", emailStyle.Render(strings.Join(additionalInfo, ", ")))
 		}
 
 		fmt.Printf("%s. %s – %s%s\n", rank, path, coverageStr, infoStr)
 	}
 
-	// Show a few high coverage files as well
 	if len(entries) > topN {
-		fmt.Printf("\n  %s\n", color.GreenString("🏆 Files with highest coverage:"))
+		fmt.Println(cellStyle.Render("\n🏆 Files with highest coverage:"))
 
-		// Sort by coverage percentage (highest first)
 		sort.Slice(entries, func(i, j int) bool {
 			return entries[i].CoveragePercent > entries[j].CoveragePercent
 		})
@@ -805,11 +818,11 @@ func PrintCodeCoverageLeaderboard(entries []types.CoverageEntry, overallCoverage
 		for i := 0; i < maxHighCoverage; i++ {
 			entry := entries[i]
 			if entry.CoveragePercent < 80 {
-				continue // Skip if not high coverage
+				continue
 			}
 
-			path := color.CyanString(entry.Path)
-			coverageStr := color.GreenString("%.1f%%", entry.CoveragePercent)
+			path := cellStyle.Render(entry.Path)
+			coverageStr := cellStyle.Render(fmt.Sprintf("%.1f%%", entry.CoveragePercent))
 
 			fmt.Printf("     %s – %s\n", path, coverageStr)
 		}
@@ -817,29 +830,26 @@ func PrintCodeCoverageLeaderboard(entries []types.CoverageEntry, overallCoverage
 
 	if overallCoverage > 0 {
 		fmt.Printf("\n  %s Overall Coverage: %s (%d/%d lines covered)\n",
-			color.BlueString("📊"),
-			color.New(color.Bold).Sprintf("%.1f%%", overallCoverage),
-			(int)(overallCoverage/100 * float64(entries[0].LinesTotal)), entries[0].LinesTotal) // Simplified for example
+			cellStyle.Render("📊"),
+			cellStyle.Render(fmt.Sprintf("%.1f%%", overallCoverage)),
+			(int)(overallCoverage/100*float64(entries[0].LinesTotal)), entries[0].LinesTotal)
 	}
 }
 
 func PrintSpellCheckLeaderboard(entries []types.SpellCheckEntry, authorStats map[string]*types.SpellCheckAuthorStats, topN int) {
-	fmt.Printf("\n📝 %s\n", color.New(color.Bold).Sprint("Spell Check Leaderboard - Files with Most Spelling Errors:"))
+	fmt.Println(titleStyle.Render("Spell Check Leaderboard - Files with Most Spelling Errors"))
 
 	if len(entries) == 0 {
-		fmt.Printf("  %s No spelling issues found or no text files to analyze\n", color.GreenString("🎉"))
+		fmt.Println(cellStyle.Render("🎉 No spelling issues found or no text files to analyze"))
 		return
 	}
 
-	// Show file leaderboard
 	printSpellCheckFileLeaderboard(entries, topN)
-
-	// Show author leaderboard
 	printSpellCheckAuthorLeaderboard(authorStats, topN)
 }
 
 func printSpellCheckFileLeaderboard(entries []types.SpellCheckEntry, topN int) {
-	fmt.Printf("\n  %s\n", color.New(color.Bold).Sprint("📁 Files with Most Spelling Errors:"))
+	fmt.Println(titleStyle.Render("Files with Most Spelling Errors"))
 
 	maxEntries := topN
 	if len(entries) < maxEntries {
@@ -848,19 +858,18 @@ func printSpellCheckFileLeaderboard(entries []types.SpellCheckEntry, topN int) {
 
 	for i := 0; i < maxEntries; i++ {
 		entry := entries[i]
-		rank := fmt.Sprintf("%2d", i+1)
-		path := color.CyanString(entry.Path)
+		rank := rankStyle.Render(fmt.Sprintf("%2d", i+1))
+		path := cellStyle.Render(entry.Path)
 
-		var errorColor *color.Color
+		var errorColor lipgloss.Style
 		if entry.ErrorRate > 10 {
-			errorColor = color.New(color.FgRed)
+			errorColor = errorStyle
 		} else if entry.ErrorRate > 5 {
-			errorColor = color.New(color.FgYellow)
+			errorColor = warningStyle
 		} else {
-			errorColor = color.New(color.FgGreen)
+			errorColor = cellStyle
 		}
 
-		// Show top misspellings
 		var topMisspellings []string
 		type wordCount struct {
 			word  string
@@ -875,7 +884,7 @@ func printSpellCheckFileLeaderboard(entries []types.SpellCheckEntry, topN int) {
 		})
 
 		for i, wc := range wordCounts {
-			if i >= 3 { // Show top 3 misspellings
+			if i >= 3 {
 				break
 			}
 			topMisspellings = append(topMisspellings, fmt.Sprintf("%s(%d)", wc.word, wc.count))
@@ -887,17 +896,15 @@ func printSpellCheckFileLeaderboard(entries []types.SpellCheckEntry, topN int) {
 		}
 
 		fmt.Printf("    %s. %s – %s error rate (%d/%d words)%s\n",
-			rank, path,
-			errorColor.Sprintf("%.1f%%", entry.ErrorRate),
+			rank, path, errorColor.Render(fmt.Sprintf("%.1f%%", entry.ErrorRate)),
 			entry.MisspelledWords, entry.TotalWords,
-			color.New(color.FgHiBlack).Sprint(misspellingsStr))
+			emailStyle.Render(misspellingsStr))
 	}
 
-	// Show example issues with authors
 	if len(entries) > 0 && len(entries[0].Issues) > 0 {
 		fmt.Printf("\n  %s Examples from %s:\n",
-			color.YellowString("🔍"),
-			color.CyanString(entries[0].Path))
+			warningStyle.Render("🔍"),
+			cellStyle.Render(entries[0].Path))
 
 		maxExamples := 5
 		for i, issue := range entries[0].Issues {
@@ -912,21 +919,21 @@ func printSpellCheckFileLeaderboard(entries []types.SpellCheckEntry, topN int) {
 
 			authorStr := ""
 			if issue.Author != "unknown" {
-				authorStr = fmt.Sprintf(" (by %s)", color.BlueString(issue.Author))
+				authorStr = fmt.Sprintf(" (by %s)", nameStyle.Render(issue.Author))
 			}
 
 			fmt.Printf("    Line %d: '%s' in %s%s%s\n",
 				issue.Line,
-				color.RedString(issue.Word),
+				errorStyle.Render(issue.Word),
 				issue.Type,
 				authorStr,
-				color.GreenString(suggestionStr))
+				cellStyle.Render(suggestionStr))
 		}
 	}
 }
 
 func printSpellCheckAuthorLeaderboard(authorStats map[string]*types.SpellCheckAuthorStats, topN int) {
-	fmt.Printf("\n  %s\n", color.New(color.Bold).Sprint("👤 Authors with Most Spelling Errors:"))
+	fmt.Println(titleStyle.Render("Authors with Most Spelling Errors"))
 
 	type authorEntry struct {
 		Name            string
@@ -969,14 +976,14 @@ func printSpellCheckAuthorLeaderboard(authorStats map[string]*types.SpellCheckAu
 
 	for i := 0; i < maxEntries; i++ {
 		entry := entries[i]
-		rank := fmt.Sprintf("%2d", i+1)
-		name := color.RedString(entry.Name)
-		email := color.New(color.FgHiBlack).Sprintf("(%s)", entry.Email)
+		rank := rankStyle.Render(fmt.Sprintf("%2d", i+1))
+		name := nameStyle.Render(entry.Name)
+		email := emailStyle.Render(fmt.Sprintf("(%s)", entry.Email))
 
 		topMistakeStr := ""
 		if entry.TopMistake != "" {
 			topMistakeStr = fmt.Sprintf(", top mistake: %s(%d)",
-				color.YellowString(entry.TopMistake), entry.TopMistakeCount)
+				topRuleStyle.Render(entry.TopMistake), entry.TopMistakeCount)
 		}
 
 		fmt.Printf("    %s. %s %s – %d errors in %d files%s\n",

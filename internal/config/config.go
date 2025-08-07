@@ -24,6 +24,9 @@ type Config struct {
 	SpellCheckEnabled     bool
 	SpellCheckExtensions  []string
 	SpellCheckIgnorePaths []string
+	RuffEnabled           bool
+	RuffRules             []string
+	RuffIgnorePaths       []string
 }
 
 func NewConfig() *Config {
@@ -42,6 +45,9 @@ func NewConfig() *Config {
 		SpellCheckEnabled:     true,
 		SpellCheckExtensions:  []string{".js", ".ts", ".jsx", ".tsx", ".md", ".txt"},
 		SpellCheckIgnorePaths: []string{"node_modules", "dist", "build"},
+		RuffEnabled:           true,
+		RuffRules:             []string{},
+		RuffIgnorePaths:       []string{"node_modules", "dist", "build"},
 	}
 }
 
@@ -159,6 +165,12 @@ func (c *Config) parseKeyValue(key, value string) error {
 		c.SpellCheckExtensions = parseList(value)
 	case "spellcheck-ignore-paths":
 		c.SpellCheckIgnorePaths = parseList(value)
+	case "ruff-enabled":
+		c.RuffEnabled = strings.ToLower(value) == "true"
+	case "ruff-rules":
+		c.RuffRules = append(c.RuffRules, parseList(value)...)
+	case "ruff-ignore-paths":
+		c.RuffIgnorePaths = append(c.RuffIgnorePaths, parseList(value)...)
 	default:
 		c.CustomSettings[key] = value
 	}
@@ -296,6 +308,11 @@ spellcheck-enabled = true
 custom-words = "api,url,auth,oauth,async,await,json,xml,css,html,dom,ui,ux"
 spellcheck-extensions = ".js,.ts,.jsx,.tsx,.md,.txt,.py,.java"
 spellcheck-ignore-paths = "node_modules,dist,build,coverage"
+
+# Ruff (Python Linter) configuration
+ruff-enabled = true
+ruff-rules = "E501,F401"
+ruff-ignore-paths = "venv,.venv,migrations"
 
 `
 

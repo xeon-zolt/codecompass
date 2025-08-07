@@ -40,32 +40,7 @@ func NewSpellChecker(cfg *config.Config) (*SpellChecker, error) {
 }
 
 func (sc *SpellChecker) IsCorrect(word string) bool {
-	lowerWord := strings.ToLower(word)
-
-	// Check custom dictionary first
-	if sc.customDict[lowerWord] {
-		return true
-	}
-
-	// Check programming dictionary
-	if sc.progDict[lowerWord] {
-		return true
-	}
-
-	// Check common patterns
-	if isCommonPattern(lowerWord) {
-		return true
-	}
-
-	// Use fuzzy model - if exact match found, it's correct
-	suggestions := sc.model.Suggestions(word, false)
-	for _, suggestion := range suggestions {
-		if strings.EqualFold(suggestion, word) {
-			return true
-		}
-	}
-
-	return false
+	return isCorrectlySpelled(word)
 }
 
 func (sc *SpellChecker) GetSuggestions(word string) []string {
@@ -251,7 +226,7 @@ var basicDictionary = map[string]bool{
 	"right": true, "said": true, "same": true, "seem": true, "show": true,
 	"small": true, "sound": true, "still": true, "time": true, "turn": true,
 	"want": true, "water": true, "went": true, "what": true, "where": true,
-	"will": true, "write": true, "would": true, "year": true, "your": true,
+	"will": true, "write": true, "would": true, "year": true, "your": true, "hello": true, "test": true, "code": true,
 	// Add more common words as needed
 	"about": true, "after": true, "again": true, "against": true, "always": true,
 	"another": true, "around": true, "because": true, "before": true, "being": true,
