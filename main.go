@@ -303,9 +303,11 @@ func main() {
 		// Run ESLint
 		eslintIssues, err := eslint.RunESLint(filteredFiles, ignoredRules)
 		if err != nil {
-			log.Fatal("Failed to run ESLint:", err)
+			fmt.Printf("❌ Warning: Failed to run ESLint: %s\n", errorStyle.Render(err.Error()))
+			needsESLint = false // Disable ESLint leaderboards if it fails
+		} else {
+			issues = append(issues, eslintIssues...)
 		}
-		issues = append(issues, eslintIssues...)
 
 		if !*quiet {
 			fmt.Printf("📊 %d lint issues collected.\n", len(eslintIssues))
@@ -329,10 +331,12 @@ func main() {
 
 		currentRuffIssues, err := ruff.RunRuff(pythonFiles, cfg.RuffRules, cfg.RuffIgnorePaths)
 		if err != nil {
-			log.Fatal("Failed to run Ruff:", err)
+			fmt.Printf("❌ Warning: Failed to run Ruff: %s\n", errorStyle.Render(err.Error()))
+			needsRuff = false // Disable Ruff leaderboards if it fails
+		} else {
+			ruffIssues = append(ruffIssues, currentRuffIssues...)
+			issues = append(issues, currentRuffIssues...)
 		}
-		ruffIssues = append(ruffIssues, currentRuffIssues...)
-		issues = append(issues, currentRuffIssues...)
 
 		if !*quiet {
 			fmt.Printf("📊 %d Ruff issues collected.\n", len(currentRuffIssues))
