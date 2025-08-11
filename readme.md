@@ -1,7 +1,6 @@
 # CodeCompass 🧭
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/xeon/codecompass)](https://goreportcard.com/report/github.com/xeoncross/codecompass)
-[![Go](https://github.com/xeoncross/codecompass/actions/workflows/release.yml/badge.svg)](https://github.com/xeoncross/codecompass/actions/workflows/release.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/xeon-zolt/codecompass)](https://goreportcard.com/report/github.com/xeon-zolt/codecompass) [![Go](https://github.com/xeon-zolt/codecompass/actions/workflows/release.yml/badge.svg)](https://github.com/xeon-zolt/codecompass/actions/workflows/release.yml)
 
 A comprehensive code quality navigation tool that helps you understand and improve your codebase. CodeCompass combines insights from various sources, including linting results and Git history, to provide detailed leaderboards and metrics.
 
@@ -9,6 +8,7 @@ A comprehensive code quality navigation tool that helps you understand and impro
 
 - [Features](#-features)
 - [Installation](#-installation)
+- [Quickstart](#-quickstart)
 - [Usage](#-usage)
 - [Command Line Options](#-command-line-options)
 - [Configuration](#-configuration)
@@ -20,29 +20,50 @@ A comprehensive code quality navigation tool that helps you understand and impro
 
 CodeCompass provides a multi-dimensional view of your codebase, represented by compass directions:
 
--   **🧭 North**: Identifies authors who introduced the most lint issues.
--   **🧭 South**: Highlights files with the highest number of linting problems.
--   **🧭 East**: Shows the most frequently violated ESLint rules.
--   **🧭 West**: Ranks files by their lines of code.
--   **🧭 And more**: Provides leaderboards for commit activity, code coverage, code churn, bug density, technical debt, and spell-checking.
+- **🧭 North**: Identifies authors who introduced the most lint issues.
+- **🧭 South**: Highlights files with the highest number of linting problems.
+- **🧭 East**: Shows the most frequently violated ESLint rules.
+- **🧭 West**: Ranks files by their lines of code.
+- **🧭 And more**: Provides leaderboards for commit activity, code coverage, code churn, bug density, technical debt, and spell-checking.
 
 ## 📦 Installation
+
+### Homebrew (Recommended)
+
+```bash
+brew tap xeon-zolt/tap
+brew install codecompass
+```
+
+The Homebrew formula is available at [Formula/codecompass.rb](Formula/codecompass.rb) and uses the latest release [v0.0.1-beta.3](https://github.com/xeon-zolt/codecompass/archive/refs/tags/v0.0.1-beta.3.tar.gz).
 
 ### From Source
 
 ```bash
-git clone https://github.com/xeoncross/codecompass
+git clone https://github.com/xeon-zolt/codecompass.git
 cd codecompass
 go mod tidy
 CGO_ENABLED=0 go build -o codecompass main.go
 chmod +x codecompass
 ```
 
-### Homebrew
+## 🚀 Quickstart
+
+### Install via Homebrew
 
 ```bash
-brew tap xeoncross/tap
+brew tap xeon-zolt/tap
 brew install codecompass
+```
+
+### Install from Source
+
+```bash
+git clone https://github.com/xeon-zolt/codecompass.git
+cd codecompass
+go mod tidy
+CGO_ENABLED=0 go build -o codecompass main.go
+chmod +x codecompass
 ```
 
 ## 🚀 Usage
@@ -50,19 +71,16 @@ brew install codecompass
 ### Basic Usage
 
 Analyze current directory:
-
 ```bash
 ./codecompass --all
 ```
 
 Analyze a specific repository:
-
 ```bash
 ./codecompass /path/to/your/project --all
 ```
 
 Show only specific leaderboards:
-
 ```bash
 ./codecompass --authors --files --coverage
 ```
@@ -78,7 +96,7 @@ This creates a `.codecompass.rc` file with all available options:
 ## 📋 Command Line Options
 
 | Option | Description |
-| --- | --- |
+|--------|-------------|
 | `--authors` | Show author leaderboard (lint issue contributors) |
 | `--files` | Show file leaderboard (most problematic files) |
 | `--rules` | Show rule leaderboard (most violated rules) |
@@ -116,11 +134,11 @@ go test ./...
 
 ## 🤝 Contributing
 
-1.  Fork the repository.
-2.  Create your feature branch (`git checkout -b feature/amazing-feature`).
-3.  Commit your changes (`git commit -m 'Add some amazing feature'`).
-4.  Push to the branch (`git push origin feature/amazing-feature`).
-5.  Open a Pull Request.
+1. Fork the repository.
+2. Create your feature branch (`git checkout -b feature/amazing-feature`).
+3. Commit your changes (`git commit -m 'Add some amazing feature'`).
+4. Push to the branch (`git push origin feature/amazing-feature`).
+5. Open a Pull Request.
 
 ## 📄 License
 
