@@ -1,10 +1,10 @@
 name: Release
-
-on: 
+on:
   push:
     tags:
       - 'v*'
-
+permissions:
+  contents: write
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -12,30 +12,46 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
+          ref: ${{ github.ref }}
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.22'
-
       - name: Build
         run: go build -o codecompass -ldflags "-s -w"
-
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: codecompass
         env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Generate Homebrew tap
         run: |
           TAG=${{ github.ref_name }}
-          SHA256=$(sha256sum codecompass | awk '{print $1}')
-          sed -i "s|url \"https://github.com/xeoncross/codecompass/archive/refs/tags/v0.0.1.tar.gz\"|url \"https://github.com/xeoncross/codecompass/archive/refs/tags/${TAG}.tar.gz\"|" Formula/codecompass.rb
-          sed -i "s|sha256 \"0000000000000000000000000000000000000000000000000000000000000000\"|sha256 \"${SHA256}\"|" Formula/codecompass.rb
+          TARBALL_URL="https://github.com/xeon-zolt/codecompass/archive/refs/tags/${TAG}.tar.gz"
+          SHA256=$(curl -sL "${TARBALL_URL}" | sha256sum | awk '{print $1}')
+          BRANCH_NAME="homebrew-update-${TAG}"
+          
+          # Create and checkout new branch
+          git checkout -b "${BRANCH_NAME}"
+          
+          # Update Formula with correct URL and SHA256
+          sed -i "s|url \"https://github.com/xeoncross/codecompass/archive/refs/tags/[^\"]*\"|url \"${TARBALL_URL}\"|g" Formula/codecompass.rb
+          sed -i "s|sha256 \"[^\"]*\"|sha256 \"${SHA256}\"|g" Formula/codecompass.rb
+          
           git config user.name github-actions[bot]
           git config user.email github-actions[bot]@users.noreply.github.com
           git add Formula/codecompass.rb
           git commit -m "Update codecompass.rb for ${TAG}"
-          git push https://oauth2:${{ secrets.REPO_ACCESS_TOKEN }}@github.com/${{ github.repository }}.git HEAD:main
+          
+          # Push branch and create PR
+          git push origin "${BRANCH_NAME}"
+          
+          # Create pull request using GitHub CLI or API
+          gh pr create \
+            --title "Update Homebrew formula for ${TAG}" \
+            --body "Automated update of codecompass.rb formula for release ${TAG}" \
+            --base main \
+            --head "${BRANCH_NAME}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
