@@ -5,6 +5,7 @@ on:
       - 'v*'
 permissions:
   contents: write
+  pull-requests: write
 jobs:
   release:
     runs-on: ubuntu-latest
