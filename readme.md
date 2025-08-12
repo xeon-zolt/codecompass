@@ -12,6 +12,7 @@ A comprehensive code quality navigation tool that helps you understand and impro
 - [Usage](#-usage)
 - [Command Line Options](#-command-line-options)
 - [Configuration](#-configuration)
+- [CI Charts](#-ci-charts)
 - [Development](#-development)
 - [Contributing](#-contributing)
 - [License](#-license)
@@ -78,7 +79,7 @@ This creates a `.codecompass.rc` file with all available options:
 ## 📋 Command Line Options
 
 | Option | Description |
-| --- | --- |
+|--------|-------------|
 | `--authors` | Show author leaderboard (lint issue contributors) |
 | `--files` | Show file leaderboard (most problematic files) |
 | `--rules` | Show rule leaderboard (most violated rules) |
@@ -106,6 +107,15 @@ CodeCompass can be configured via a `.codecompass.rc` file. To generate a sample
 
 The configuration file allows you to ignore files, authors, rules, and paths, as well as set performance-related options.
 
+## 📊 CI Charts
+
+Every push to the main branch (and manual workflow triggers) automatically generates visualization charts using CodeCompass. These charts include:
+
+- **radar.svg**: A comprehensive radar chart showing various code quality metrics
+- **trends.csv**: Historical trend data for tracking code quality over time
+
+The generated charts are available as downloadable artifacts from the **Actions** tab. Look for the "Charts" workflow runs to download the latest `codecompass-charts` artifact containing both files.
+
 ## 🛠️ Development
 
 To run the tests, use the following command:
@@ -116,11 +126,11 @@ go test ./...
 
 ## 🤝 Contributing
 
-1.  Fork the repository.
-2.  Create your feature branch (`git checkout -b feature/amazing-feature`).
-3.  Commit your changes (`git commit -m 'Add some amazing feature'`).
-4.  Push to the branch (`git push origin feature/amazing-feature`).
-5.  Open a Pull Request.
+1. Fork the repository.
+2. Create your feature branch (`git checkout -b feature/amazing-feature`).
+3. Commit your changes (`git commit -m 'Add some amazing feature'`).
+4. Push to the branch (`git push origin feature/amazing-feature`).
+5. Open a Pull Request.
 
 ## 📄 License
 
