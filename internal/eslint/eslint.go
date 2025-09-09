@@ -20,9 +20,21 @@ func isESLintAvailable() bool {
 		return err == nil
 	}
 	
-	// Check if eslint can be run via npx
+	// Check if eslint can be run via npx and has proper configuration
 	cmd := exec.Command("npx", "eslint", "--version")
 	err = cmd.Run()
+	if err != nil {
+		return false
+	}
+	
+	// Check if ESLint can run on current directory (test for configuration)
+	cmd = exec.Command("npx", "eslint", ".", "--format", "json")
+	err = cmd.Run()
+	// If ESLint exits with code 2, it usually means configuration error
+	if exitError, ok := err.(*exec.ExitError); ok {
+		return exitError.ExitCode() != 2
+	}
+	
 	return err == nil
 }
 
@@ -33,26 +45,33 @@ var runCommand = func(name string, arg ...string) ([]byte, error) {
 }
 
 func RunESLint(trackedFiles map[string]bool, ignoredRules []string) ([]types.Issue, error) {
+	// Check if there are any JavaScript/TypeScript files to lint
+	hasJSFiles := false
+	for file := range trackedFiles {
+		if filepath.Ext(file) == ".js" || filepath.Ext(file) == ".jsx" || 
+		   filepath.Ext(file) == ".ts" || filepath.Ext(file) == ".tsx" ||
+		   filepath.Ext(file) == ".mjs" || filepath.Ext(file) == ".cjs" {
+			hasJSFiles = true
+			break
+		}
+	}
+	
+	if !hasJSFiles {
+		return []types.Issue{}, nil // Return empty results, no JS/TS files to lint
+	}
+
 	// First check if ESLint is available
 	if !isESLintAvailable() {
 		return nil, fmt.Errorf("ESLint not found. Please install ESLint:\n  • Locally: npm install eslint\n  • Globally: npm install -g eslint\n  • Or ensure npx is available")
 	}
 
 	output, err := runCommand("npx", "eslint", ".", "--format", "json")
-
+	
 	if err != nil {
-		if exitError, ok := err.(*exec.ExitError); ok {
+		if _, ok := err.(*exec.ExitError); ok {
 			// ESLint returns non-zero exit code if issues are found, which is not an error for us.
-			// ESLint outputs JSON to stdout even when there are issues
-			output = exitError.Stderr
-			if len(output) == 0 {
-				// Try to get stdout which contains the actual JSON results
-				cmd := exec.Command("npx", "eslint", ".", "--format", "json")
-				output, err = cmd.Output()
-				if err != nil {
-					return nil, fmt.Errorf("failed to run ESLint: %w", err)
-				}
-			}
+			// The JSON output is still valid and available in the output variable from cmd.Output()
+			// We already have the output, so we can continue processing
 		} else {
 			return nil, fmt.Errorf("failed to run ESLint: %w", err)
 		}

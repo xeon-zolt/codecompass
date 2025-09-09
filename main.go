@@ -98,9 +98,10 @@ func main() {
 		showLogo = flag.Bool("logo", false, "Show CodeCompass ASCII art")
 
 		// Leaderboard flags (default to false to be opt-in)
-		showAuthors    = flag.Bool("authors", false, "Show author leaderboard (lint issue contributors)")
-		showFiles      = flag.Bool("files", false, "Show file leaderboard (most problematic files)")
-		showRules      = flag.Bool("rules", false, "Show rule leaderboard (most violated rules)")
+		showAuthors       = flag.Bool("authors", false, "Show author leaderboard (lint issue contributors)")
+		showAuthorDetails = flag.Bool("authors-details", false, "Show detailed author leaderboard with files per author")
+		showFiles         = flag.Bool("files", false, "Show file leaderboard (most problematic files)")
+		showRules         = flag.Bool("rules", false, "Show rule leaderboard (most violated rules)")
 		showLoc        = flag.Bool("loc", false, "Show lines of code leaderboard")
 		showCommits    = flag.Bool("commits", false, "Show regular commit count leaderboard (non-merges)")
 		showMerges     = flag.Bool("merges", false, "Show merge commit count leaderboard")
@@ -171,6 +172,7 @@ func main() {
 
 	if *showAll {
 		*showAuthors = true
+		*showAuthorDetails = true
 		*showFiles = true
 		*showRules = true
 		*showLoc = true
@@ -193,7 +195,7 @@ func main() {
 	}
 
 	// Check if any action was requested by the user.
-	actionRequested := *showAuthors || *showFiles || *showRules || *showLoc ||
+	actionRequested := *showAuthors || *showAuthorDetails || *showFiles || *showRules || *showLoc ||
 		*showCommits || *showMerges || *showRecent || *showCoverage || *showChurn ||
 		*showBugs || *showDebt || *showComplexity || *showSummary || *showSpellCheck || *showRuff ||
 		*showTrends || *showQuality || *showHotspots || *showTeam || *showCharts ||
@@ -309,7 +311,7 @@ func main() {
 	}
 
 	// Check if ESLint-based leaderboards are needed
-	needsESLint := *showAuthors || *showFiles || *showRules
+	needsESLint := *showAuthors || *showAuthorDetails || *showFiles || *showRules
 
 	var issues []types.Issue
 	var ruffIssues []types.Issue
@@ -418,11 +420,15 @@ func main() {
 	}
 
 	// Generate leaderboards with compass directions
-	if *showAuthors && len(issues) > 0 {
+	if (*showAuthors || *showAuthorDetails) && len(issues) > 0 {
 		fmt.Printf("\n🧭 %s", leaderboardTitleStyle.Foreground(lipgloss.Color("#FFFF00")).Render("North: "))
 		if needsESLint {
 			authorEntries := leaderboard.GenerateAuthorLeaderboard(authorStats, *topN)
-			leaderboard.PrintAuthorLeaderboard(authorEntries, *topN)
+			if *showAuthorDetails {
+				leaderboard.PrintAuthorLeaderboardWithDetails(authorEntries, authorStats, *topN, true)
+			} else {
+				leaderboard.PrintAuthorLeaderboard(authorEntries, *topN)
+			}
 			if *logHistory {
 				if err := history.WriteAuthorLeaderboardCSV(*logDir, authorEntries); err != nil {
 					fmt.Printf("❌ Failed to log author leaderboard: %s\n", errorStyle.Render(err.Error()))
@@ -722,6 +728,7 @@ func showUsage() {
 
 	fmt.Println(usageHeaderStyle.Render("COMPASS DIRECTIONS (Leaderboards):"))
 	fmt.Printf("  %s North    --authors              Author leaderboard (lint issue contributors)\n", MINI_COMPASS)
+	fmt.Printf("  %s North+   --authors-details      Detailed author leaderboard with files per author\n", MINI_COMPASS)
 	fmt.Printf("  %s South    --files                File leaderboard (most problematic files)\n", MINI_COMPASS)
 	fmt.Printf("  %s East     --rules                Rule leaderboard (most violated rules)\n", MINI_COMPASS)
 	fmt.Printf("  %s West     --loc                  Lines of code leaderboard\n", MINI_COMPASS)

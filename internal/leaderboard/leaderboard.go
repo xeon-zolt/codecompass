@@ -496,6 +496,10 @@ var (
 )
 
 func PrintAuthorLeaderboard(entries []types.LeaderboardEntry, topN int) {
+	PrintAuthorLeaderboardWithDetails(entries, nil, topN, false)
+}
+
+func PrintAuthorLeaderboardWithDetails(entries []types.LeaderboardEntry, authorStats map[string]*types.AuthorStats, topN int, showFileDetails bool) {
 	fmt.Println(titleStyle.Render("Author Leaderboard - Most ESLint Issues"))
 
 	if len(entries) == 0 {
@@ -519,6 +523,52 @@ func PrintAuthorLeaderboard(entries []types.LeaderboardEntry, topN int) {
 
 		fmt.Printf("%s. %s %s – %d issues (%s errors, %s warnings), %d files, top rule: %s (%d)\n",
 			rank, name, email, entry.Count, errors, warnings, entry.Files, topRule, entry.TopCount)
+
+		// Show file details if requested and authorStats is provided
+		if showFileDetails && authorStats != nil {
+			if stats, exists := authorStats[entry.Email]; exists && len(stats.Files) > 0 {
+				// Sort files by issue count for this author
+				type fileIssueCount struct {
+					path  string
+					count int
+				}
+				var fileIssues []fileIssueCount
+				for filePath, count := range stats.Files {
+					fileIssues = append(fileIssues, fileIssueCount{filePath, count})
+				}
+				sort.Slice(fileIssues, func(i, j int) bool {
+					return fileIssues[i].count > fileIssues[j].count
+				})
+
+				fmt.Printf("    %s Files with issues:\n", warningStyle.Render("📁"))
+				maxFiles := 10 // Show top 10 files with issues
+				if len(fileIssues) < maxFiles {
+					maxFiles = len(fileIssues)
+				}
+				
+				for j := 0; j < maxFiles; j++ {
+					fileIssue := fileIssues[j]
+					fileStyle := cellStyle.Copy().Foreground(lipgloss.Color("#87CEEB"))
+					countStyle := cellStyle.Copy()
+					if fileIssue.count > 10 {
+						countStyle = errorStyle
+					} else if fileIssue.count > 5 {
+						countStyle = warningStyle
+					}
+					
+					fmt.Printf("      • %s (%s issues)\n", 
+						fileStyle.Render(fileIssue.path),
+						countStyle.Render(fmt.Sprintf("%d", fileIssue.count)))
+				}
+				
+				if len(fileIssues) > maxFiles {
+					remaining := len(fileIssues) - maxFiles
+					fmt.Printf("      %s ... and %d more files\n", 
+						emailStyle.Render("•"), remaining)
+				}
+				fmt.Println()
+			}
+		}
 	}
 }
 
