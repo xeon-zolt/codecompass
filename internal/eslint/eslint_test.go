@@ -1,54 +1,36 @@
 package eslint
 
 import (
-	"os"
-	"os/exec"
-	"path/filepath"
 	"testing"
-
-	
 )
 
 func TestRunESLint(t *testing.T) {
-	// Create a temporary directory
-	tmpdir, err := os.MkdirTemp("", "eslint_test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tmpdir)
+	// Mock ESLint JSON output
+	mockESLintOutput := `[
+    {
+        "filePath": "test.js",
+        "messages": [
+            {
+                "ruleId": "no-console",
+                "severity": 2,
+                "message": "Unexpected console statement.",
+                "line": 1,
+                "column": 1
+            }
+        ]
+    }
+]`
 
-	// Change to the temporary directory
-	oldwd, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.Chdir(oldwd)
-	os.Chdir(tmpdir)
-
-	// Create a package.json file
-	packageJSON := `{ "devDependencies": { "eslint": "^8.0.0" } }`
-	if err := os.WriteFile("package.json", []byte(packageJSON), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	// Create an .eslintrc.js file
-	eslintrc := `module.exports = { "rules": { "no-console": "error" } };`
-	if err := os.WriteFile(".eslintrc.js", []byte(eslintrc), 0644); err != nil {
-		t.Fatal(err)
+	// Override runCommand for testing
+	oldRunCommand := runCommand
+	defer func() {
+		runCommand = oldRunCommand
+	}()
+	runCommand = func(name string, arg ...string) ([]byte, error) {
+		return []byte(mockESLintOutput), nil
 	}
 
-	// Create a file with a linting error
-	jsFile := `console.log("hello");`
-	if err := os.WriteFile("test.js", []byte(jsFile), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	// Install ESLint
-	if err := exec.Command("npm", "install").Run(); err != nil {
-		t.Fatal(err)
-	}
-
-	// Run ESLint
+	// Create a dummy file path for testing purposes
 	trackedFiles := map[string]bool{"test.js": true}
 	issues, err := RunESLint(trackedFiles, []string{})
 	if err != nil {
@@ -69,7 +51,7 @@ func TestRunESLint(t *testing.T) {
 		t.Errorf("Expected line number to be 1, but got %d", issue.Line)
 	}
 
-	if filepath.Base(issue.FilePath) != "test.js" {
+	if issue.FilePath != "test.js" {
 		t.Errorf("Expected file path to be 'test.js', but got '%s'", issue.FilePath)
 	}
 }

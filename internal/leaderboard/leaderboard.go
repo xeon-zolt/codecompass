@@ -1,7 +1,6 @@
 package leaderboard
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"os/exec"
@@ -16,6 +15,7 @@ import (
 	"codecompass/internal/git"
 	"codecompass/internal/spellcheck"
 	"codecompass/internal/types"
+	"codecompass/internal/utils"
 
 	"github.com/charmbracelet/lipgloss"
 )
@@ -232,8 +232,14 @@ func GenerateCodeChurnLeaderboard(trackedFiles map[string]bool, topN int) ([]typ
 			continue
 		}
 
-		added, _ := strconv.Atoi(parts[0])
-		deleted, _ := strconv.Atoi(parts[1])
+		added, err := strconv.Atoi(parts[0])
+		if err != nil {
+			continue // Skip line if we can't parse added count
+		}
+		deleted, err := strconv.Atoi(parts[1])
+		if err != nil {
+			continue // Skip line if we can't parse deleted count
+		}
 		filePath := parts[2]
 
 		if !trackedFiles[filePath] {
@@ -333,46 +339,10 @@ func GenerateBugDensityLeaderboard(trackedFiles map[string]bool, topN int) ([]ty
 }
 
 func GenerateTechnicalDebtLeaderboard(trackedFiles map[string]bool, topN int) ([]types.TechnicalDebtEntry, error) {
-	var entries []types.TechnicalDebtEntry
-
-	todoRegex := regexp.MustCompile(`(?i)//\s*todo|#\s*todo|/\*\s*todo`)
-	fixmeRegex := regexp.MustCompile(`(?i)//\s*fixme|#\s*fixme|/\*\s*fixme`)
-	hackRegex := regexp.MustCompile(`(?i)//\s*hack|#\s*hack|/\*\s*hack`)
-
-	for filePath := range trackedFiles {
-		file, err := os.Open(filePath)
-		if err != nil {
-			continue
-		}
-
-		var todoCount, fixmeCount, hackCount int
-		scanner := bufio.NewScanner(file)
-
-		for scanner.Scan() {
-			line := scanner.Text()
-			if todoRegex.MatchString(line) {
-				todoCount++
-			}
-			if fixmeRegex.MatchString(line) {
-				fixmeCount++
-			}
-			if hackRegex.MatchString(line) {
-				hackCount++
-			}
-		}
-
-		file.Close()
-
-		totalDebt := todoCount + fixmeCount + hackCount
-		if totalDebt > 0 {
-			entries = append(entries, types.TechnicalDebtEntry{
-				Path:       filePath,
-				TodoCount:  todoCount,
-				FixmeCount: fixmeCount,
-				HackCount:  hackCount,
-				TotalDebt:  totalDebt,
-			})
-		}
+	scanner := utils.NewTechnicalDebtScanner()
+	entries, err := scanner.ScanFiles(trackedFiles)
+	if err != nil {
+		return nil, err
 	}
 
 	sort.Slice(entries, func(i, j int) bool {

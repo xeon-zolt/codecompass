@@ -28,21 +28,51 @@ CodeCompass provides a multi-dimensional view of your codebase, represented by c
 
 ## 📦 Installation
 
-### From Source
+### 🍺 Homebrew (Recommended - macOS)
 
 ```bash
-git clone https://github.com/xeoncross/codecompass
-cd codecompass
-go mod tidy
-CGO_ENABLED=0 go build -o codecompass main.go
-chmod +x codecompass
+# Install from tap (coming soon)
+brew tap xeon-zolt/codecompass
+brew install codecompass
+
+# Or install directly (for now)
+./install.sh
 ```
 
-### Homebrew
+### 🔧 Quick Install Script (All Platforms)
 
 ```bash
-brew tap xeoncross/tap
-brew install codecompass
+# Download and run installer
+curl -sSL https://raw.githubusercontent.com/xeon-zolt/codecompass/main/install.sh | bash
+
+# Or clone and run
+git clone https://github.com/xeon-zolt/codecompass.git
+cd codecompass
+./install.sh
+```
+
+### 🏗️ From Source (Manual)
+
+```bash
+git clone https://github.com/xeon-zolt/codecompass.git
+cd codecompass
+go mod tidy
+go build -ldflags "-s -w -X main.version=v1.0.0" -o codecompass
+sudo cp codecompass /usr/local/bin/
+```
+
+### 📋 Post-Installation
+
+After installation, set up your configuration:
+```bash
+# Generate configuration file
+codecompass --generate-config
+
+# View available options  
+codecompass --help
+
+# Test installation
+codecompass --version
 ```
 
 ## 🚀 Usage

@@ -18,7 +18,7 @@ import (
 var (
 	blameCache    = make(map[string]map[int]types.BlameInfo)
 	blameFailures = make(map[string]bool)
-	cacheMutex    sync.Mutex
+	cacheMutex    sync.RWMutex
 )
 
 func ValidateRepository() error {
@@ -186,24 +186,36 @@ func GetRecentContributors(days int) (map[string]types.RecentContributorEntry, e
 }
 
 func BlameFile(filePath string, warningLogs *[]string, mu *sync.Mutex, semaphore *utils.Semaphore) (map[int]types.BlameInfo, error) {
-	cacheMutex.Lock()
+	return BlameFileWithConfig(filePath, warningLogs, mu, semaphore, nil)
+}
+
+func BlameFileWithConfig(filePath string, warningLogs *[]string, mu *sync.Mutex, semaphore *utils.Semaphore, cfg interface{}) (map[int]types.BlameInfo, error) {
+	cacheMutex.RLock()
 	if blameMap, exists := blameCache[filePath]; exists {
-		cacheMutex.Unlock()
+		cacheMutex.RUnlock()
 		return blameMap, nil
 	}
 	if blameFailures[filePath] {
-		cacheMutex.Unlock()
+		cacheMutex.RUnlock()
 		return make(map[int]types.BlameInfo), fmt.Errorf("file already failed")
 	}
-	cacheMutex.Unlock()
+	cacheMutex.RUnlock()
 
 	semaphore.Acquire()
 	defer semaphore.Release()
 
 	normalizedPath := strings.ReplaceAll(filePath, "\\", "/")
-	time.Sleep(50 * time.Millisecond)
+	
+	// Use configurable timeouts and delays
+	processDelay := 50 * time.Millisecond
+	blameTimeout := 30 * time.Second
+	
+	// For now, use default values - config integration can be added later
+	_ = cfg
+	
+	time.Sleep(processDelay)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), blameTimeout)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "git", "blame", "--line-porcelain", "--", normalizedPath)

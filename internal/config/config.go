@@ -27,6 +27,8 @@ type Config struct {
 	RuffEnabled           bool
 	RuffRules             []string
 	RuffIgnorePaths       []string
+	BlameTimeoutSeconds   int
+	ProcessDelayMs        int
 }
 
 func NewConfig() *Config {
@@ -48,6 +50,8 @@ func NewConfig() *Config {
 		RuffEnabled:           true,
 		RuffRules:             []string{},
 		RuffIgnorePaths:       []string{"node_modules", "dist", "build"},
+		BlameTimeoutSeconds:   30,
+		ProcessDelayMs:        50,
 	}
 }
 
@@ -171,6 +175,18 @@ func (c *Config) parseKeyValue(key, value string) error {
 		c.RuffRules = append(c.RuffRules, parseList(value)...)
 	case "ruff-ignore-paths":
 		c.RuffIgnorePaths = append(c.RuffIgnorePaths, parseList(value)...)
+	case "blame-timeout-seconds":
+		if timeout, err := strconv.Atoi(value); err == nil {
+			c.BlameTimeoutSeconds = timeout
+		} else {
+			return fmt.Errorf("invalid blame-timeout-seconds value: %s", value)
+		}
+	case "process-delay-ms":
+		if delay, err := strconv.Atoi(value); err == nil {
+			c.ProcessDelayMs = delay
+		} else {
+			return fmt.Errorf("invalid process-delay-ms value: %s", value)
+		}
 	default:
 		c.CustomSettings[key] = value
 	}

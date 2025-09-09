@@ -7,6 +7,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"codecompass/internal/utils"
 )
 
 type ChurnEntry struct {
@@ -56,8 +58,14 @@ func GetCodeChurnLeaderboard(trackedFiles map[string]bool) ([]ChurnEntry, error)
 			continue
 		}
 
-		added, _ := strconv.Atoi(parts[0])
-		deleted, _ := strconv.Atoi(parts[1])
+		added, err := strconv.Atoi(parts[0])
+		if err != nil {
+			continue // Skip line if we can't parse added count
+		}
+		deleted, err := strconv.Atoi(parts[1])
+		if err != nil {
+			continue // Skip line if we can't parse deleted count
+		}
 		filePath := parts[2]
 
 		if !trackedFiles[filePath] {
@@ -148,47 +156,23 @@ func GetBugDensityLeaderboard(trackedFiles map[string]bool) ([]BugDensityEntry, 
 }
 
 func GetTechnicalDebtLeaderboard(trackedFiles map[string]bool) ([]TechnicalDebtEntry, error) {
-	var entries []TechnicalDebtEntry
-
-	todoRegex := regexp.MustCompile(`(?i)//\s*todo|#\s*todo`)
-	fixmeRegex := regexp.MustCompile(`(?i)//\s*fixme|#\s*fixme`)
-	hackRegex := regexp.MustCompile(`(?i)//\s*hack|#\s*hack`)
-
-	for filePath := range trackedFiles {
-		file, err := os.Open(filePath)
-		if err != nil {
-			continue
-		}
-
-		var todoCount, fixmeCount, hackCount int
-		scanner := bufio.NewScanner(file)
-
-		for scanner.Scan() {
-			line := scanner.Text()
-			if todoRegex.MatchString(line) {
-				todoCount++
-			}
-			if fixmeRegex.MatchString(line) {
-				fixmeCount++
-			}
-			if hackRegex.MatchString(line) {
-				hackCount++
-			}
-		}
-
-		file.Close()
-
-		totalDebt := todoCount + fixmeCount + hackCount
-		if totalDebt > 0 {
-			entries = append(entries, TechnicalDebtEntry{
-				Path:       filePath,
-				TodoCount:  todoCount,
-				FixmeCount: fixmeCount,
-				HackCount:  hackCount,
-				TotalDebt:  totalDebt,
-			})
-		}
+	scanner := utils.NewTechnicalDebtScanner()
+	entries, err := scanner.ScanFiles(trackedFiles)
+	if err != nil {
+		return nil, err
 	}
 
-	return entries, nil
+	// Convert from utils types to metrics types
+	var result []TechnicalDebtEntry
+	for _, entry := range entries {
+		result = append(result, TechnicalDebtEntry{
+			Path:       entry.Path,
+			TodoCount:  entry.TodoCount,
+			FixmeCount: entry.FixmeCount,
+			HackCount:  entry.HackCount,
+			TotalDebt:  entry.TotalDebt,
+		})
+	}
+
+	return result, nil
 }

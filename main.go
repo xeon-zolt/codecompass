@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,6 +19,10 @@ import (
 	"codecompass/internal/utils"
 
 	"codecompass/internal/ruff"
+	"codecompass/internal/trends"
+	"codecompass/internal/quality"
+	"codecompass/internal/hotspot"
+	"codecompass/internal/team"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/schollz/progressbar/v3"
@@ -110,8 +113,15 @@ func main() {
 		showSummary    = flag.Bool("summary", false, "Show repository summary")
 		showSpellCheck = flag.Bool("spellcheck", false, "Show spell check leaderboard")
 		showRuff       = flag.Bool("ruff", false, "Show Ruff (Python) leaderboard")
+		
+		// New advanced features
+		showTrends     = flag.Bool("trends", false, "Show trend analysis and charts")
+		showQuality    = flag.Bool("quality", false, "Show code quality report with scoring")
+		showHotspots   = flag.Bool("hotspots", false, "Show code hotspot analysis")
+		showTeam       = flag.Bool("team", false, "Show team performance metrics")
+		showCharts     = flag.Bool("charts", false, "Enhanced visual charts for all analyses")
 
-		showAll = flag.Bool("all", false, "Show all leaderboards")
+		showAll = flag.Bool("all", false, "Show all leaderboards and analyses")
 
 		// Configuration flags
 		topN             = flag.Int("top", 15, "Number of entries to show in leaderboards")
@@ -152,7 +162,8 @@ func main() {
 	if *generateConfig {
 		filename := ".codecompass.rc"
 		if err := config.GenerateConfigFile(filename); err != nil {
-			log.Fatalf("Failed to generate config file: %v", err)
+			fmt.Printf("❌ Failed to generate config file: %v\n", err)
+			os.Exit(1)
 		}
 		fmt.Printf("✅ Generated configuration file: %s\n", filename)
 		return
@@ -174,12 +185,18 @@ func main() {
 		*showSummary = true
 		*showSpellCheck = true
 		*showRuff = true
+		*showTrends = true
+		*showQuality = true
+		*showHotspots = true
+		*showTeam = true
+		*showCharts = true
 	}
 
 	// Check if any action was requested by the user.
 	actionRequested := *showAuthors || *showFiles || *showRules || *showLoc ||
 		*showCommits || *showMerges || *showRecent || *showCoverage || *showChurn ||
 		*showBugs || *showDebt || *showComplexity || *showSummary || *showSpellCheck || *showRuff ||
+		*showTrends || *showQuality || *showHotspots || *showTeam || *showCharts ||
 		*showConfig
 
 	// Check if Ruff-based leaderboards are needed
@@ -202,7 +219,8 @@ func main() {
 	if *configFile != "" {
 		cfg, err = config.LoadConfigFromFile(*configFile)
 		if err != nil {
-			log.Fatalf("Failed to load config file %s: %v", *configFile, err)
+			fmt.Printf("❌ Failed to load config file %s: %v\n", *configFile, err)
+			os.Exit(1)
 		}
 	} else {
 		cfg, err = config.LoadConfig()
@@ -240,15 +258,18 @@ func main() {
 		targetDir := args[0]
 		absPath, err := filepath.Abs(targetDir)
 		if err != nil {
-			log.Fatalf("Failed to resolve path %s: %v", targetDir, err)
+			fmt.Printf("❌ Failed to resolve path %s: %v\n", targetDir, err)
+			os.Exit(1)
 		}
 
 		if _, err := os.Stat(absPath); os.IsNotExist(err) {
-			log.Fatalf("Directory does not exist: %s", absPath)
+			fmt.Printf("❌ Directory does not exist: %s\n", absPath)
+			os.Exit(1)
 		}
 
 		if err := os.Chdir(absPath); err != nil {
-			log.Fatalf("Failed to change to directory %s: %v", absPath, err)
+			fmt.Printf("❌ Failed to change to directory %s: %v\n", absPath, err)
+			os.Exit(1)
 		}
 
 		if !*quiet {
@@ -258,7 +279,8 @@ func main() {
 
 	// Validate git repository
 	if err := git.ValidateRepository(); err != nil {
-		log.Fatal("Not in a git repository. Please run from within a git repository or specify a valid git repository path.")
+		fmt.Println("❌ Not in a git repository. Please run from within a git repository or specify a valid git repository path.")
+		os.Exit(1)
 	}
 
 	// Show configuration summary if verbose
@@ -270,7 +292,8 @@ func main() {
 	// Get tracked files
 	trackedFiles, err := git.GetTrackedFiles()
 	if err != nil {
-		log.Fatal("Failed to get tracked files:", err)
+		fmt.Printf("❌ Failed to get tracked files: %v\n", err)
+		os.Exit(1)
 	}
 
 	// Filter tracked files based on config
@@ -380,8 +403,8 @@ func main() {
 				bar.Add(1)
 			}
 
-			// Small delay to prevent system overload
-			time.Sleep(50 * time.Millisecond)
+			// Configurable delay to prevent system overload
+			time.Sleep(time.Duration(cfg.ProcessDelayMs) * time.Millisecond)
 		}
 
 		if bar != nil {
@@ -601,6 +624,47 @@ func main() {
 		leaderboard.GenerateSummaryStats(authorStats, fileStats, ruleStats)
 	}
 
+	// New advanced features
+	if *showTrends {
+		fmt.Printf("\n🧭 %s", leaderboardTitleStyle.Foreground(lipgloss.Color("#FF69B4")).Render("Trend Analysis: "))
+		trendAnalyzer := trends.NewTrendAnalyzer(30) // Last 30 days
+		trendSummary, err := trendAnalyzer.GenerateTrendSummary()
+		if err != nil {
+			fmt.Printf("❌ Failed to generate trend analysis: %s\n", errorStyle.Render(err.Error()))
+		} else {
+			trends.PrintTrendAnalysis(trendSummary)
+		}
+	}
+
+	if *showQuality {
+		fmt.Printf("\n🧭 %s", leaderboardTitleStyle.Foreground(lipgloss.Color("#9370DB")).Render("Quality Analysis: "))
+		qualityScorer := quality.NewQualityScorer()
+		qualityReport := qualityScorer.GenerateQualityReport(fileStats, authorStats, filteredFiles)
+		quality.PrintQualityReport(qualityReport, *topN)
+	}
+
+	if *showHotspots {
+		fmt.Printf("\n🧭 %s", leaderboardTitleStyle.Foreground(lipgloss.Color("#FF4500")).Render("Hotspot Analysis: "))
+		hotspotDetector := hotspot.NewHotspotDetector()
+		hotspots, err := hotspotDetector.DetectHotspots(fileStats, filteredFiles, *topN)
+		if err != nil {
+			fmt.Printf("❌ Failed to detect hotspots: %s\n", errorStyle.Render(err.Error()))
+		} else {
+			hotspot.PrintHotspotAnalysis(hotspots)
+		}
+	}
+
+	if *showTeam {
+		fmt.Printf("\n🧭 %s", leaderboardTitleStyle.Foreground(lipgloss.Color("#32CD32")).Render("Team Analysis: "))
+		teamAnalyzer := team.NewTeamAnalyzer()
+		teamMetrics, teamMembers, err := teamAnalyzer.AnalyzeTeamPerformance(authorStats, fileStats)
+		if err != nil {
+			fmt.Printf("❌ Failed to analyze team performance: %s\n", errorStyle.Render(err.Error()))
+		} else {
+			team.PrintTeamAnalysis(teamMetrics, teamMembers)
+		}
+	}
+
 	if len(warningLogs) > 0 && !*quiet {
 		fmt.Printf("\n%s %s\n", MINI_COMPASS, warningStyle.Render("Navigation Warnings:"))
 		for _, warn := range warningLogs {
@@ -673,6 +737,13 @@ func showUsage() {
 		fmt.Printf("  %s WNW      --ruff                   Ruff (Python) leaderboard\n", MINI_COMPASS)
 		fmt.Printf("  %s Center   --summary              Repository summary\n\n", MINI_COMPASS)
 
+	fmt.Println(usageHeaderStyle.Render("ADVANCED ANALYSES:"))
+	fmt.Printf("  %s 📈       --trends               Trend analysis with charts (commit activity, author trends)\n", MINI_COMPASS)
+	fmt.Printf("  %s 📊       --quality              Code quality scoring and comprehensive report\n", MINI_COMPASS)
+	fmt.Printf("  %s 🔥       --hotspots             Hotspot detection (high-risk files analysis)\n", MINI_COMPASS)
+	fmt.Printf("  %s 👥       --team                 Team performance and collaboration metrics\n", MINI_COMPASS)
+	fmt.Printf("  %s 📊       --charts               Enhanced visual charts for all analyses\n\n", MINI_COMPASS)
+
 	fmt.Println(usageHeaderStyle.Render("CONFIGURATION OPTIONS:"))
 	fmt.Println(infoStyle.Render("  --config FILE          Path to configuration file (.codecompass.rc)"))
 	fmt.Println(infoStyle.Render("  --generate-config      Generate a sample configuration file"))
@@ -696,11 +767,13 @@ func showUsage() {
 	fmt.Println(infoStyle.Render("  -v, --version          Show version information\n"))
 
 	fmt.Println(usageHeaderStyle.Render("NAVIGATION EXAMPLES:"))
-	fmt.Printf("  %s --all                              # Full compass navigation (all leaderboards)\n", os.Args[0])
+	fmt.Printf("  %s --all                              # Full compass navigation (all analyses)\n", os.Args[0])
 	fmt.Printf("  %s                                     # Show help message\n", os.Args[0])
 	fmt.Printf("  %s /path/to/repo --commits --merges   # Navigate specific repository and compare commits\n", os.Args[0])
 	fmt.Printf("  %s --authors --files                  # North & South directions only\n", os.Args[0])
-	fmt.Printf("  %s --loc --coverage                   # West & SE directions (no ESLint)\n", os.Args[0])
+	fmt.Printf("  %s --quality --hotspots               # Advanced quality and hotspot analysis\n", os.Args[0])
+	fmt.Printf("  %s --trends --team                    # Team performance and trend analysis\n", os.Args[0])
+	fmt.Printf("  %s --loc --coverage --charts          # Enhanced visual analysis\n", os.Args[0])
 	fmt.Printf("  %s --generate-config                  # Create .codecompass.rc file\n\n", os.Args[0])
 
 	fmt.Println(usageHeaderStyle.Render("CONFIGURATION FILE:"))
