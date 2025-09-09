@@ -1,0 +1,161 @@
+name: 🧪 Test Homebrew Automation
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_version:
+        description: 'Test version (e.g., v1.0.1-test)'
+        required: true
+        default: 'v1.0.1-test'
+        type: string
+
+jobs:
+  test-automation:
+    name: Test Homebrew Automation
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    
+    steps:
+      - name: Checkout main repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Setup test environment
+        id: test-setup
+        run: |
+          VERSION="${{ inputs.test_version }}"
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "version_number=${VERSION#v}" >> $GITHUB_OUTPUT
+          echo "tarball_url=https://github.com/${{ github.repository }}/archive/refs/tags/${VERSION}.tar.gz" >> $GITHUB_OUTPUT
+
+      - name: Create test tag (if not exists)
+        run: |
+          if ! git tag -l "${{ steps.test-setup.outputs.version }}"; then
+            echo "🏷️ Creating test tag ${{ steps.test-setup.outputs.version }}"
+            git tag -a ${{ steps.test-setup.outputs.version }} -m "Test tag for automation testing"
+            git push origin ${{ steps.test-setup.outputs.version }}
+          else
+            echo "ℹ️ Test tag already exists"
+          fi
+
+      - name: Test SHA256 calculation
+        id: test-sha256
+        run: |
+          echo "🧮 Testing SHA256 calculation..."
+          
+          # Wait a moment for tag to be available
+          sleep 5
+          
+          # Try to download and calculate SHA256
+          SHA256=$(curl -sL "${{ steps.test-setup.outputs.tarball_url }}" | sha256sum | cut -d' ' -f1) || {
+            echo "❌ Failed to calculate SHA256"
+            echo "URL: ${{ steps.test-setup.outputs.tarball_url }}"
+            exit 1
+          }
+          
+          echo "sha256=${SHA256}" >> $GITHUB_OUTPUT
+          echo "✅ SHA256 calculated: ${SHA256}"
+
+      - name: Test formula syntax
+        run: |
+          echo "🧪 Testing formula syntax updates..."
+          
+          # Create temporary formula with test values
+          cp Formula/codecompass.rb test-formula.rb
+          
+          # Update with test values
+          sed -i 's|url ".*"|url "${{ steps.test-setup.outputs.tarball_url }}"|' test-formula.rb
+          sed -i 's|sha256 ".*"|sha256 "${{ steps.test-sha256.outputs.sha256 }}"|' test-formula.rb
+          
+          # Test Ruby syntax
+          ruby -c test-formula.rb || {
+            echo "❌ Formula syntax test failed"
+            cat test-formula.rb
+            exit 1
+          }
+          
+          echo "✅ Formula syntax test passed"
+
+      - name: Test tap repository access
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          echo "🔐 Testing tap repository access..."
+          
+          # Test if we can access the tap repository
+          if gh repo view xeon-zolt/homebrew-codecompass >/dev/null 2>&1; then
+            echo "✅ Can access homebrew-codecompass repository"
+          else
+            echo "❌ Cannot access homebrew-codecompass repository"
+            echo "This might be due to missing HOMEBREW_TAP_TOKEN"
+            exit 1
+          fi
+
+      - name: Simulate automation workflow
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          echo "🚀 Simulating full automation workflow..."
+          
+          # Check if we can clone the tap repository
+          if git clone https://github.com/xeon-zolt/homebrew-codecompass.git test-tap 2>/dev/null; then
+            echo "✅ Successfully cloned tap repository"
+            
+            cd test-tap
+            
+            # Test formula update
+            echo "📝 Testing formula update in tap..."
+            cp ../test-formula.rb Formula/codecompass.rb
+            
+            # Test git operations (dry run)
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add Formula/codecompass.rb
+            
+            if git diff --staged --quiet; then
+              echo "ℹ️ No changes to commit (expected for test)"
+            else
+              echo "✅ Changes detected and ready to commit"
+            fi
+            
+            cd ..
+          else
+            echo "❌ Failed to clone tap repository"
+            exit 1
+          fi
+
+      - name: Test cleanup
+        run: |
+          echo "🧹 Cleaning up test artifacts..."
+          
+          # Remove test tag (comment out if you want to keep it)
+          # git push --delete origin ${{ steps.test-setup.outputs.version }} || echo "Tag not found on remote"
+          # git tag -d ${{ steps.test-setup.outputs.version }} || echo "Tag not found locally"
+          
+          # Clean up test files
+          rm -f test-formula.rb
+          rm -rf test-tap
+          
+          echo "✅ Cleanup completed"
+
+      - name: Test summary
+        run: |
+          echo "## 🧪 Automation Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Test Version | ${{ steps.test-setup.outputs.version }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| SHA256 Calculation | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+          echo "| Formula Syntax | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+          echo "| Tap Repository Access | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+          echo "| Git Operations | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🎉 Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "All automation components are working correctly!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🚀 Ready for Production" >> $GITHUB_STEP_SUMMARY
+          echo "The automation is ready to handle real releases." >> $GITHUB_STEP_SUMMARY
+          echo "Create a release to see it in action!" >> $GITHUB_STEP_SUMMARY

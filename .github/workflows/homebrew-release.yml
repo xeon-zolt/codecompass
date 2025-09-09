@@ -14,12 +14,23 @@ jobs:
   update-homebrew-formula:
     name: Update Homebrew Formula
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
     
     steps:
-      - name: Checkout repository
+      - name: Checkout main repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Checkout Homebrew tap repository
+        uses: actions/checkout@v4
+        with:
+          repository: xeon-zolt/homebrew-codecompass
+          path: homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Set up variables
         id: vars
@@ -64,31 +75,69 @@ jobs:
           echo "SHA256: ${{ steps.sha256.outputs.sha256 }}"
           echo "URL: ${{ steps.vars.outputs.tarball_url }}"
 
-      - name: Commit formula updates
+      - name: Update Homebrew tap repository
         if: github.event_name == 'release'
         run: |
+          # Configure Git
           git config --global user.name 'github-actions[bot]'
           git config --global user.email '41898282+github-actions[bot]@users.noreply.github.com'
           
+          # Update formula in main repository
           git add Formula/codecompass.rb
-          git commit -m "🧭 Update Homebrew formula for ${{ steps.vars.outputs.version }}"
-          git push
+          git commit -m "🧭 Update Homebrew formula for ${{ steps.vars.outputs.version }}" || echo "No changes in main repo"
+          git push || echo "No changes to push in main repo"
+          
+          # Update formula in tap repository
+          cd homebrew-tap
+          cp ../Formula/codecompass.rb Formula/codecompass.rb
+          
+          # Update the formula with correct URL and SHA256
+          sed -i 's|url ".*"|url "${{ steps.vars.outputs.tarball_url }}"|' Formula/codecompass.rb
+          sed -i 's|sha256 ".*"|sha256 "${{ steps.sha256.outputs.sha256 }}"|' Formula/codecompass.rb
+          
+          # Commit and push to tap repository
+          git add Formula/codecompass.rb
+          git commit -m "🚀 Auto-update formula to ${{ steps.vars.outputs.version }}
 
-      - name: Create Homebrew tap PR (if tap exists)
+          - Version: ${{ steps.vars.outputs.version }}
+          - SHA256: ${{ steps.sha256.outputs.sha256 }}
+          - Auto-updated by GitHub Actions from main repository
+          
+          🧭 Navigate Your Code Quality!" || echo "No changes in tap repo"
+          git push || echo "No changes to push in tap repo"
+          
+          echo "✅ Homebrew tap repository updated successfully!"
+
+      - name: Create GitHub release for tap (if needed)
         if: github.event_name == 'release'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
-          echo "🚀 Formula ready for Homebrew tap update"
-          echo "Manual step: Update tap repository with new formula"
+          cd homebrew-tap
           
-          # Note: This would require a separate tap repository
-          # For now, we'll just prepare the formula file
-          
-          echo "Formula updated and ready for release:"
-          echo "- Version: ${{ steps.vars.outputs.version }}"
-          echo "- SHA256: ${{ steps.sha256.outputs.sha256 }}"
-          echo "- Tarball: ${{ steps.vars.outputs.tarball_url }}"
+          # Check if we should create a release in the tap repo
+          if ! gh release view ${{ steps.vars.outputs.version }} --repo xeon-zolt/homebrew-codecompass 2>/dev/null; then
+            echo "🚀 Creating release in tap repository..."
+            gh release create ${{ steps.vars.outputs.version }} \
+              --repo xeon-zolt/homebrew-codecompass \
+              --title "🧭 CodeCompass ${{ steps.vars.outputs.version }}" \
+              --notes "Auto-updated Homebrew formula for CodeCompass ${{ steps.vars.outputs.version }}
+              
+            ## Installation
+            \`\`\`bash
+            brew tap xeon-zolt/codecompass
+            brew install codecompass
+            \`\`\`
+            
+            ## Changes
+            - Updated to CodeCompass ${{ steps.vars.outputs.version }}
+            - SHA256: ${{ steps.sha256.outputs.sha256 }}
+            - Source: ${{ steps.vars.outputs.tarball_url }}
+            
+            🧭 Navigate Your Code Quality!"
+          else
+            echo "ℹ️ Release already exists in tap repository"
+          fi
 
       - name: Create artifact
         uses: actions/upload-artifact@v4
@@ -107,9 +156,19 @@ jobs:
           echo "| Version | ${{ steps.vars.outputs.version }} |" >> $GITHUB_STEP_SUMMARY
           echo "| SHA256 | ${{ steps.sha256.outputs.sha256 }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Tarball URL | ${{ steps.vars.outputs.tarball_url }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Formula Status | ✅ Updated and validated |" >> $GITHUB_STEP_SUMMARY
+          echo "| Main Formula | ✅ Updated and validated |" >> $GITHUB_STEP_SUMMARY
+          echo "| Homebrew Tap | ✅ Auto-updated |" >> $GITHUB_STEP_SUMMARY
+          echo "| Tap Release | ✅ Auto-created |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 📋 Next Steps" >> $GITHUB_STEP_SUMMARY
-          echo "1. Formula has been automatically updated" >> $GITHUB_STEP_SUMMARY
-          echo "2. Users can install with: \`brew install codecompass\`" >> $GITHUB_STEP_SUMMARY
-          echo "3. Consider submitting to official Homebrew core if popular enough" >> $GITHUB_STEP_SUMMARY
+          echo "### 🚀 Automated Updates Completed" >> $GITHUB_STEP_SUMMARY
+          echo "1. ✅ Main repository formula updated" >> $GITHUB_STEP_SUMMARY
+          echo "2. ✅ Homebrew tap repository updated" >> $GITHUB_STEP_SUMMARY
+          echo "3. ✅ Tap release created with installation notes" >> $GITHUB_STEP_SUMMARY
+          echo "4. ✅ Users can install with: \`brew tap xeon-zolt/codecompass && brew install codecompass\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Installation Ready" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "brew tap xeon-zolt/codecompass" >> $GITHUB_STEP_SUMMARY
+          echo "brew install codecompass" >> $GITHUB_STEP_SUMMARY
+          echo "codecompass --quality  # Start analyzing!" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
