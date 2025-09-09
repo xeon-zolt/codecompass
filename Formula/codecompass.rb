@@ -2,7 +2,7 @@ class Codecompass < Formula
   desc "Navigate Your Code Quality - A comprehensive code quality analysis tool with advanced analytics"
   homepage "https://github.com/xeon-zolt/codecompass"
   url "https://github.com/xeon-zolt/codecompass/archive/refs/tags/v1.0.0.tar.gz" # Update with each release
-  sha256 "PLACEHOLDER_SHA256_HASH" # Calculate with: shasum -a 256 codecompass-v1.0.0.tar.gz
+  sha256 "a87de951a733a15483322fe45aefddcab1c712632e7148c15297676e34f44a72" # Calculate with: shasum -a 256 codecompass-v1.0.0.tar.gz
   license "MIT"
 
   depends_on "go" => :build
