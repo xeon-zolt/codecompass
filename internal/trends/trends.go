@@ -275,22 +275,71 @@ func PrintTrendAnalysis(summary *TrendSummary) {
 
 	// Commit activity trend
 	if len(summary.CommitTrends) > 0 {
-		chart := charts.TrendChart(summary.CommitTrends, 60, 8, "📈 Daily Commit Activity")
+		// Show both daily and weekly aggregated views
+		chart := charts.TrendChart(summary.CommitTrends, 80, 12, "📈 Daily Commit Activity")
 		fmt.Println(chart)
 		
-		// Calculate trend direction
-		if len(summary.CommitTrends) >= 2 {
-			start := summary.CommitTrends[0].Value
-			end := summary.CommitTrends[len(summary.CommitTrends)-1].Value
-			
-			if end > start {
-				fmt.Println("📈 Trend: Increasing activity")
-			} else if end < start {
-				fmt.Println("📉 Trend: Decreasing activity")
-			} else {
-				fmt.Println("➡️  Trend: Stable activity")
+		// Calculate statistics
+		total := 0.0
+		max := 0.0
+		activeDays := 0
+		
+		for _, trend := range summary.CommitTrends {
+			total += trend.Value
+			if trend.Value > max {
+				max = trend.Value
+			}
+			if trend.Value > 0 {
+				activeDays++
 			}
 		}
+		
+		avg := total / float64(len(summary.CommitTrends))
+		activityRate := float64(activeDays) / float64(len(summary.CommitTrends)) * 100
+		
+		fmt.Printf("📊 Stats: %.1f commits/day avg | %.0f max | %d/%d active days (%.1f%%)\n", 
+			avg, max, activeDays, len(summary.CommitTrends), activityRate)
+		
+		// Calculate trend direction with more context
+		if len(summary.CommitTrends) >= 7 {
+			// Compare recent week vs previous week
+			recentWeek := 0.0
+			previousWeek := 0.0
+			
+			for i := len(summary.CommitTrends)-7; i < len(summary.CommitTrends); i++ {
+				recentWeek += summary.CommitTrends[i].Value
+			}
+			
+			if len(summary.CommitTrends) >= 14 {
+				for i := len(summary.CommitTrends)-14; i < len(summary.CommitTrends)-7; i++ {
+					previousWeek += summary.CommitTrends[i].Value
+				}
+				
+				change := ((recentWeek - previousWeek) / previousWeek) * 100
+				if change > 20 {
+					fmt.Printf("📈 Trend: Strong increase (%.1f%% vs previous week)\n", change)
+				} else if change > 5 {
+					fmt.Printf("📈 Trend: Moderate increase (%.1f%% vs previous week)\n", change)
+				} else if change < -20 {
+					fmt.Printf("📉 Trend: Strong decrease (%.1f%% vs previous week)\n", change)
+				} else if change < -5 {
+					fmt.Printf("📉 Trend: Moderate decrease (%.1f%% vs previous week)\n", change)
+				} else {
+					fmt.Printf("➡️  Trend: Stable activity (%.1f%% change)\n", change)
+				}
+			}
+		}
+		
+		// Show weekly breakdown
+		if len(summary.CommitTrends) >= 7 {
+			fmt.Println("\n📅 Weekly Breakdown:")
+			weeklyData := aggregateWeekly(summary.CommitTrends)
+			for i, week := range weeklyData {
+				weekStart := time.Now().AddDate(0, 0, -(len(weeklyData)-i)*7).Format("Jan 2")
+				fmt.Printf("  Week of %s: %.0f commits\n", weekStart, week)
+			}
+		}
+		
 		fmt.Println()
 	}
 
@@ -331,4 +380,27 @@ func truncate(s string, maxLen int) string {
 		return s[:maxLen]
 	}
 	return s[:maxLen-3] + "..."
+}
+
+// aggregateWeekly aggregates daily data into weekly totals
+func aggregateWeekly(daily []charts.TimeSeriesData) []float64 {
+	if len(daily) < 7 {
+		return []float64{}
+	}
+	
+	weeks := len(daily) / 7
+	weekly := make([]float64, weeks)
+	
+	for i := 0; i < weeks; i++ {
+		weekTotal := 0.0
+		for j := 0; j < 7; j++ {
+			idx := i*7 + j
+			if idx < len(daily) {
+				weekTotal += daily[idx].Value
+			}
+		}
+		weekly[i] = weekTotal
+	}
+	
+	return weekly
 }

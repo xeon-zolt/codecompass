@@ -138,7 +138,7 @@ func PrintHotspotAnalysis(hotspots []Hotspot) {
 	var chartData []charts.ChartData
 	for i, hotspot := range hotspots {
 		if i < 10 { // Top 10 for chart
-			label := truncateFilePath(hotspot.FilePath, 20)
+			label := truncateFilePath(hotspot.FilePath, 35)
 			chartData = append(chartData, charts.ChartData{
 				Label: label,
 				Value: hotspot.Score,
@@ -147,8 +147,25 @@ func PrintHotspotAnalysis(hotspots []Hotspot) {
 	}
 	
 	if len(chartData) > 0 {
-		chart := charts.BarChart(chartData, 80, "📊 Hotspot Severity Scores")
+		// Use wider chart with better visibility
+		chart := charts.BarChart(chartData, 120, "📊 Hotspot Severity Scores")
 		fmt.Println(chart)
+		fmt.Println()
+		
+		// Add numerical breakdown for clarity
+		fmt.Println("📊 Severity Score Breakdown:")
+		for i, data := range chartData {
+			score := data.Value
+			risk := "Low"
+			if score >= 7 {
+				risk = "Critical"
+			} else if score >= 5 {
+				risk = "High"
+			} else if score >= 3 {
+				risk = "Medium"
+			}
+			fmt.Printf("  %d. %-35s Score: %6.1f (%s)\n", i+1, data.Label, score, risk)
+		}
 		fmt.Println()
 	}
 	

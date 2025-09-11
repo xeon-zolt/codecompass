@@ -6,9 +6,6 @@
 
 
 
-# But not these files...
-!/.gitignore
-
 !*.go
 !go.sum
 !go.mod
@@ -51,3 +48,7 @@ go.work.sum
 # .idea/
 # .vscode/
 codecompass
+.claude/settings.local.json
+CLAUDE.md
+.codecompass.rc
+.gitignore

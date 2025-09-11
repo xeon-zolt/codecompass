@@ -11,7 +11,9 @@ import (
 
 	"codecompass/internal/analyzer"
 	"codecompass/internal/config"
+	"codecompass/internal/critical"
 	"codecompass/internal/eslint"
+	"codecompass/internal/jsanalysis"
 	"codecompass/internal/git"
 	"codecompass/internal/history"
 	"codecompass/internal/leaderboard"
@@ -131,6 +133,11 @@ func main() {
 		configFile       = flag.String("config", "", "Path to configuration file")
 		generateConfig   = flag.Bool("generate-config", false, "Generate a sample configuration file")
 		showConfig       = flag.Bool("show-config", false, "Show current configuration and exit")
+		analyzeFile      = flag.String("file", "", "Analyze specific file (JavaScript/TypeScript only)")
+		detailedIssues   = flag.Bool("detailed", false, "Show detailed issue analysis with suggestions")
+		enableSpellCheck = flag.Bool("spell-check", false, "Enable spell checking (may slow down analysis)")
+		criticalOnly     = flag.Bool("critical-only", false, "Show only critical server-breaking issues")
+		showCriticalDetails = flag.Bool("critical-details", false, "Show detailed critical issue analysis with fix suggestions")
 
 		// Advanced flags
 		enableCache = flag.Bool("cache", true, "Enable caching for better performance")
@@ -157,6 +164,27 @@ func main() {
 
 	if *showLogo {
 		showCompassArt()
+		return
+	}
+
+	// Handle single file analysis
+	if *analyzeFile != "" {
+		result, err := jsanalysis.AnalyzeSingleFile(*analyzeFile, *detailedIssues, *enableSpellCheck)
+		if err != nil {
+			fmt.Printf("❌ Error analyzing file: %v\n", err)
+			os.Exit(1)
+		}
+
+		if *detailedIssues {
+			result.PrintDetailedResults(*analyzeFile)
+		} else {
+			// Convert to standard issues and display
+			issues := result.ConvertToIssues()
+			fmt.Printf("🔍 Found %d issues in %s\n", len(issues), *analyzeFile)
+			for _, issue := range issues {
+				fmt.Printf("  Line %d: [%s] %s\n", issue.Line, issue.RuleID, issue.Message)
+			}
+		}
 		return
 	}
 
@@ -310,6 +338,16 @@ func main() {
 		fmt.Printf("📁 Found %d tracked files (%d after filtering)\n", len(trackedFiles), len(filteredFiles))
 	}
 
+	// Auto-enable ruff if Python files are detected
+	if !needsRuff {
+		for file := range filteredFiles {
+			if strings.HasSuffix(file, ".py") {
+				needsRuff = true
+				break
+			}
+		}
+	}
+
 	// Check if ESLint-based leaderboards are needed
 	needsESLint := *showAuthors || *showAuthorDetails || *showFiles || *showRules
 
@@ -334,8 +372,75 @@ func main() {
 			issues = append(issues, eslintIssues...)
 		}
 
+		// Run JavaScript Static Analysis
 		if !*quiet {
-			fmt.Printf("📊 %d lint issues collected.\n", len(eslintIssues))
+			fmt.Printf("%s %s\n", MINI_COMPASS, lipgloss.NewStyle().Foreground(lipgloss.Color("#0000FF")).Render("Running JavaScript static analysis..."))
+		}
+		
+		jsAnalysisResult, err := jsanalysis.RunJSAnalysis(filteredFiles, *enableSpellCheck)
+		if err != nil {
+			fmt.Printf("❌ Warning: Failed to run JavaScript analysis: %s\n", errorStyle.Render(err.Error()))
+		} else {
+			jsIssues := jsAnalysisResult.ConvertToIssues()
+			
+			// If critical-only mode, filter to only include critical server-breaking issues
+			if *criticalOnly && len(jsAnalysisResult.CriticalIssues) > 0 {
+				criticalIssuesConverted := critical.ConvertCriticalToIssues(jsAnalysisResult.CriticalIssues)
+				issues = append(issues, criticalIssuesConverted...)
+			} else if !*criticalOnly {
+				issues = append(issues, jsIssues...)
+			}
+			
+			if !*quiet {
+				if *criticalOnly && len(jsAnalysisResult.CriticalIssues) > 0 {
+					fmt.Printf("🔍 %d critical server-breaking issues found.\n", len(jsAnalysisResult.CriticalIssues))
+				} else {
+					fmt.Printf("🔍 %d code quality issues found.\n", len(jsIssues))
+				}
+				
+				// Show summary of different issue types
+				criticalIssues := len(jsAnalysisResult.CriticalIssues)
+				missingImports := len(jsAnalysisResult.MissingImports)
+				unusedImports := len(jsAnalysisResult.UnusedImports)
+				complexityIssues := len(jsAnalysisResult.ComplexityIssues)
+				securityIssues := len(jsAnalysisResult.SecurityIssues)
+				spellingIssues := len(jsAnalysisResult.SpellingIssues)
+				
+				// Show critical issues first (highest priority)
+				if criticalIssues > 0 {
+					fmt.Printf("   🚨 %d CRITICAL server-breaking issues\n", criticalIssues)
+				}
+				if missingImports > 0 {
+					fmt.Printf("   📦 %d potential missing imports\n", missingImports)
+				}
+				if unusedImports > 0 {
+					fmt.Printf("   🗑️  %d unused imports\n", unusedImports)
+				}
+				if complexityIssues > 0 {
+					fmt.Printf("   🧮 %d complexity issues\n", complexityIssues)
+				}
+				if securityIssues > 0 {
+					fmt.Printf("   🔒 %d security concerns\n", securityIssues)
+				}
+				if spellingIssues > 0 {
+					fmt.Printf("   📝 %d spelling issues\n", spellingIssues)
+				}
+				
+				// Add deployment warning for critical issues
+				if criticalIssues > 0 {
+					fmt.Printf("   ⚠️  WARNING: Critical issues found - review before deployment!\n")
+				}
+				
+				// Show detailed critical analysis if requested
+				if *showCriticalDetails && len(jsAnalysisResult.CriticalIssues) > 0 {
+					fmt.Println()
+					critical.PrintCriticalAnalysis(jsAnalysisResult.CriticalIssues)
+				}
+			}
+		}
+
+		if !*quiet {
+			fmt.Printf("📊 %d total lint issues collected.\n", len(eslintIssues))
 			if len(ignoredRules) > 0 {
 				fmt.Printf("🚫 Ignored ESLint rules: %s\n", strings.Join(ignoredRules, ", "))
 			}
@@ -608,7 +713,8 @@ func main() {
 		}
 	}
 
-	if *showRuff {
+	// Show ruff results automatically if ruff analysis was run and found issues
+	if (*showRuff || needsRuff) && len(ruffIssues) > 0 {
 		fmt.Printf("\n\xe2\x90\x80 %s", leaderboardTitleStyle.Foreground(lipgloss.Color("#FFA500")).Render("WNW: "))
 		if len(ruffIssues) > 0 {
 			ruffRuleEntries := leaderboard.GenerateRuleLeaderboard(ruleStats, *topN)
@@ -763,7 +869,9 @@ func showUsage() {
 	fmt.Println(infoStyle.Render("  --logo                 Show CodeCompass ASCII art"))
 	fmt.Println(infoStyle.Render("  --cache                Enable caching for better performance (default: true)"))
 	fmt.Println(infoStyle.Render("  --verbose              Enable verbose output"))
-	fmt.Println(infoStyle.Render("  --quiet                Suppress non-essential output\n"))
+	fmt.Println(infoStyle.Render("  --quiet                Suppress non-essential output"))
+	fmt.Println(infoStyle.Render("  --critical-only        Show only critical server-breaking issues"))
+	fmt.Println(infoStyle.Render("  --critical-details     Show detailed critical issue analysis with fix suggestions\n"))
 
 	fmt.Println(usageHeaderStyle.Render("HISTORY LOGGING OPTIONS:"))
 	fmt.Println(infoStyle.Render("  --log-history          Enable logging of leaderboard data to CSV files"))
